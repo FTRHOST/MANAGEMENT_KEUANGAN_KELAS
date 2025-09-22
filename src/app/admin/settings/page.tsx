@@ -19,7 +19,7 @@ export default async function SettingsPage() {
         <CardHeader>
           <CardTitle>Pengaturan Umum</CardTitle>
           <CardDescription>
-            Ubah nama aplikasi, logo, dan parameter iuran kas.
+            Ubah nama aplikasi, logo (via URL), dan parameter iuran kas.
           </CardDescription>
         </CardHeader>
         <CardContent>

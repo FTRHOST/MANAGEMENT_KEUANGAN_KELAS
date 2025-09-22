@@ -41,7 +41,7 @@ const settingsSchema = z.object({
   appName: z.string().min(3, 'Nama aplikasi minimal 3 karakter.'),
   logoUrl: z.string().url('URL logo tidak valid.').or(z.literal('')),
   duesAmount: z.coerce.number().min(0, 'Jumlah iuran tidak boleh negatif.'),
-  startDate: z.date().nullable(),
+  startDate: z.date({ coerce: true }).nullable(),
   duesFrequency: z.enum(['weekly', 'monthly']),
 });
 
@@ -68,11 +68,7 @@ export default function SettingsForm({ currentSettings }: SettingsFormProps) {
 
   const onSubmit = async (values: z.infer<typeof settingsSchema>) => {
     try {
-      const settingsToSave: Settings = {
-        ...values,
-        startDate: values.startDate ? values.startDate.toISOString() : null
-      };
-      await updateSettings(settingsToSave);
+      await updateSettings(values);
       toast({
         title: 'Pengaturan Disimpan',
         description: 'Pengaturan aplikasi berhasil diperbarui.',
@@ -182,7 +178,7 @@ export default function SettingsForm({ currentSettings }: SettingsFormProps) {
                 <PopoverContent className="w-auto p-0" align="start">
                   <Calendar
                     mode="single"
-                    selected={field.value ?? undefined}
+                    selected={field.value}
                     onSelect={field.onChange}
                     disabled={(date) =>
                       date > new Date() || date < new Date('1900-01-01')

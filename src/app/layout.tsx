@@ -1,14 +1,15 @@
 
-import type { Metadata, ResolvingMetadata } from 'next';
+import type { Metadata } from 'next';
 import { cookies } from 'next/headers';
 import { Toaster } from '@/components/ui/toaster';
 import './globals.css';
 import { Header } from '@/components/Header';
 import { Analytics } from '@vercel/analytics/react';
 import { getSettings } from '@/lib/actions';
+import type { Settings } from '@/lib/types';
 
 export async function generateMetadata(): Promise<Metadata> {
-  const settings = await getSettings();
+  const settings: Settings = await getSettings();
   const appName = settings.appName || 'Class Cashier';
  
   return {
@@ -17,6 +18,9 @@ export async function generateMetadata(): Promise<Metadata> {
       template: `%s | ${appName}`,
     },
     description: `Aplikasi Bendahara Cerdas untuk mengelola keuangan kas kelas - ${appName}.`,
+    icons: {
+      icon: settings.logoUrl ? settings.logoUrl : '/favicon.ico',
+    },
   }
 }
 
@@ -39,8 +43,8 @@ export default async function RootLayout({
       <body className="font-body antialiased min-h-screen flex flex-col">
         <Header 
           isAuthenticated={isAuthenticated} 
-          appName={settings.appName || 'Class Cashier'}
-          logoUrl={settings.logoUrl || null}
+          appName={settings.appName}
+          logoUrl={settings.logoUrl}
         />
         <main className="flex-grow container mx-auto px-4 py-8">
           {children}

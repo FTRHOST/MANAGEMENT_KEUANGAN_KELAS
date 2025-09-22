@@ -51,14 +51,15 @@ export async function getSettings(): Promise<Settings> {
   };
 }
 
-export async function updateSettings(settings: Settings) {
+export async function updateSettings(settings: Omit<Settings, 'duesAmount' | 'startDate'> & { duesAmount: number | string, startDate: Date | string | null }) {
   const settingsDoc = doc(db, 'settings', 'config');
   const dataToSave: any = {
     ...settings,
     duesAmount: Number(settings.duesAmount) || 0,
   };
   if (settings.startDate) {
-    dataToSave.startDate = new Date(settings.startDate);
+    // Check if it's already a Date object or an ISO string
+    dataToSave.startDate = settings.startDate instanceof Date ? settings.startDate : new Date(settings.startDate);
   } else {
     dataToSave.startDate = null;
   }
@@ -67,6 +68,7 @@ export async function updateSettings(settings: Settings) {
   revalidatePath('/admin/settings');
   revalidatePath('/anggota', 'layout');
   revalidatePath('/');
+  revalidatePath('/admin');
 }
 
 
@@ -195,7 +197,7 @@ export async function getCashierDays(): Promise<CashierDay[]> {
         id: doc.id,
         ...doc.data(),
         date: doc.data().date.toDate().toISOString(),
-    } as CashierDay));
+    } as unknown as CashierDay));
 }
 
 export async function addCashierDay(date: Date, description: string) {
