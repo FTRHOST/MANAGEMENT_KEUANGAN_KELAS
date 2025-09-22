@@ -4,15 +4,16 @@ import Dashboard from "./Dashboard";
 import TransactionManager from "./TransactionManager";
 import MemberManager from "./MemberManager";
 import CashierDayManager from "./CashierDayManager";
-import type { Member, Transaction, CashierDay } from "@/lib/types";
+import type { Member, Transaction, CashierDay, Settings } from "@/lib/types";
 
 type AdminTabsProps = {
   members: Member[];
   transactions: Transaction[];
   cashierDays: CashierDay[];
+  settings: Settings;
 };
 
-export default function AdminTabs({ members, transactions, cashierDays }: AdminTabsProps) {
+export default function AdminTabs({ members, transactions, cashierDays, settings }: AdminTabsProps) {
   return (
     <Tabs defaultValue="dashboard" className="w-full">
       <TabsList className="grid w-full grid-cols-4">
@@ -28,7 +29,7 @@ export default function AdminTabs({ members, transactions, cashierDays }: AdminT
         <TransactionManager initialTransactions={transactions} members={members} />
       </TabsContent>
       <TabsContent value="members">
-        <MemberManager initialMembers={members} transactions={transactions}/>
+        <MemberManager initialMembers={members} transactions={transactions} cashierDays={cashierDays} settings={settings}/>
       </TabsContent>
       <TabsContent value="cashier-days">
         <CashierDayManager initialCashierDays={cashierDays} />

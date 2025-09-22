@@ -1,7 +1,10 @@
-import { collection, getDocs, orderBy, query } from 'firebase/firestore';
+import { getDocs, orderBy, query } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import type { Member, Transaction, CashierDay } from '@/lib/types';
+import type { Member, Transaction, CashierDay, Settings } from '@/lib/types';
 import AdminTabs from './components/AdminTabs';
+import { getCashierDays, getSettings } from '@/lib/actions';
+import { collection, getDoc, doc } from 'firebase/firestore';
+
 
 async function getAdminData() {
   const membersCol = collection(db, 'members');
@@ -19,22 +22,14 @@ async function getAdminData() {
     } as unknown as Transaction;
   });
 
-  const cashierDaysCol = collection(db, 'cashier_days');
-  const cashierDaysSnapshot = await getDocs(query(cashierDaysCol, orderBy('date', 'desc')));
-  const cashierDays = cashierDaysSnapshot.docs.map(doc => {
-      const data = doc.data();
-      return {
-          id: doc.id,
-          ...data,
-          date: data.date.toDate().toISOString(),
-      } as CashierDay;
-  });
+  const cashierDays = await getCashierDays();
+  const settings = await getSettings();
   
-  return { members, transactions, cashierDays };
+  return { members, transactions, cashierDays, settings };
 }
 
 export default async function AdminPage() {
-    const { members, transactions, cashierDays } = await getAdminData();
+    const { members, transactions, cashierDays, settings } = await getAdminData();
   
     return (
         <div className="space-y-6">
@@ -42,7 +37,7 @@ export default async function AdminPage() {
                 <h1 className="text-3xl font-bold font-headline">Panel Admin</h1>
                 <p className="text-muted-foreground">Kelola keuangan dan anggota kelas di sini.</p>
             </div>
-            <AdminTabs members={members} transactions={transactions} cashierDays={cashierDays} />
+            <AdminTabs members={members} transactions={transactions} cashierDays={cashierDays} settings={settings} />
         </div>
     );
 }

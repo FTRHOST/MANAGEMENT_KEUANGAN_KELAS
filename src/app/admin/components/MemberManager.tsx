@@ -44,7 +44,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { addMember, updateMember, deleteMember } from '@/lib/actions';
-import type { Member, Transaction } from '@/lib/types';
+import type { Member, Transaction, CashierDay, Settings } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { PlusCircle, Edit, Trash2, Loader2, Ban } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -56,6 +56,8 @@ const memberSchema = z.object({
 type MemberManagerProps = {
   initialMembers: Member[];
   transactions: Transaction[];
+  cashierDays: CashierDay[];
+  settings: Settings;
 };
 
 function formatCurrency(amount: number) {
@@ -66,7 +68,7 @@ function formatCurrency(amount: number) {
   }).format(amount);
 }
 
-export default function MemberManager({ initialMembers, transactions }: MemberManagerProps) {
+export default function MemberManager({ initialMembers, transactions, cashierDays, settings }: MemberManagerProps) {
   const { toast } = useToast();
   const [members, setMembers] = useState(initialMembers);
   const [isSubmitting, setSubmitting] = useState(false);
@@ -121,6 +123,9 @@ export default function MemberManager({ initialMembers, transactions }: MemberMa
     const balances = new Map<string, number>();
     const totalMembers = members.length > 0 ? members.length : 1;
 
+    const duesPerMeeting = settings.duesAmount || 0;
+    const totalDues = cashierDays.length * duesPerMeeting;
+
     const sharedExpenses = transactions
       .filter((t) => t.type === 'Pengeluaran' && !t.memberId)
       .reduce((sum, t) => sum + t.amount, 0);
@@ -136,11 +141,11 @@ export default function MemberManager({ initialMembers, transactions }: MemberMa
         .filter(t => t.type === 'Pengeluaran' && t.memberId === member.id)
         .reduce((sum, t) => sum + t.amount, 0);
 
-      const balance = totalPaid - personalExpenses - sharedExpensePerMember;
+      const balance = totalPaid - totalDues - personalExpenses - sharedExpensePerMember;
       balances.set(member.id, balance);
     });
     return balances;
-  }, [members, transactions]);
+  }, [members, transactions, cashierDays, settings]);
 
 
   return (
