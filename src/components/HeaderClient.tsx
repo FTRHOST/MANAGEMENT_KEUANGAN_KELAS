@@ -39,7 +39,7 @@ export default function HeaderClient({ isAuthenticated, settings }: HeaderClient
         <div className="container flex h-14 items-center">
           <Link href="/" className="mr-6 flex items-center space-x-2">
             {logoUrl ? (
-              <Image src={logoUrl} alt={`${appName} logo`} width={24} height={24} className="h-6 w-6 object-cover" />
+              <Image src={logoUrl} alt={`${appName} logo`} width={24} height={24} className="h-6 w-6" />
             ) : (
               <Wallet className="h-6 w-6 text-primary" />
             )}
