@@ -1,46 +1,14 @@
-
-'use client';
+"use client";
 
 import { useState, useEffect, useMemo } from 'react';
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { getPeriodicDues, getSettings } from '@/lib/actions';
-import { getWeeks, getMonths } from '@/lib/date-utils';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { getSettings, getPeriodicDues } from '@/lib/actions';
 import type { Member, Transaction, Settings } from '@/lib/types';
-import {
-  AlertCircle,
-  TrendingDown,
-  TrendingUp,
-  Wallet,
-  CheckCircle2,
-  Loader2,
-} from 'lucide-react';
-
-type PersonalDashboardProps = {
-  member: Member;
-  transactions: Transaction[];
-};
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Terminal, Info, Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import DuesDetailDialog from './DuesDetailDialog';
+import { getWeeks, getMonths } from '@/lib/date-utils';
 
 function formatCurrency(amount: number) {
   return new Intl.NumberFormat('id-ID', {
@@ -50,9 +18,9 @@ function formatCurrency(amount: number) {
   }).format(amount);
 }
 
-type ArrearsDetail = {
-  label: string;
-  isPaid: boolean;
+type PersonalDashboardProps = {
+  member: Member;
+  transactions: Transaction[];
 };
 
 export default function PersonalDashboard({
@@ -64,8 +32,7 @@ export default function PersonalDashboard({
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const fetchSettingsAndDues = async () => {
-      setIsLoading(true);
+    async function fetchSettingsAndDues() {
       try {
         const fetchedSettings = await getSettings();
         setSettings(fetchedSettings);
@@ -77,178 +44,125 @@ export default function PersonalDashboard({
             fetchedSettings.duesFrequency
           );
           setTotalDues(duesResult.totalDues);
-        } else {
-          setTotalDues(0);
         }
       } catch (error) {
         console.error("Failed to fetch settings or dues:", error);
-        setTotalDues(0);
       } finally {
         setIsLoading(false);
       }
-    };
-
+    }
     fetchSettingsAndDues();
   }, []);
 
-  const { totalDeposits, finalBalance, arrearsDetails } = useMemo(() => {
+  const { deposits, dues, finalBalance, balanceStatus, balanceDescription } = useMemo(() => {
     const memberDeposits = transactions
-      .filter((t) => t.type === 'Pemasukan' && t.memberId === member.id)
+      .filter((t) => t.memberId === member.id && t.type === 'Pemasukan')
       .reduce((sum, t) => sum + t.amount, 0);
 
-    const memberExpenses = transactions
-      .filter((t) => t.type === 'Pengeluaran' && t.memberId === member.id)
+    const memberDues = transactions
+      .filter((t) => t.memberId === member.id && t.type === 'Pengeluaran')
       .reduce((sum, t) => sum + t.amount, 0);
       
-    const effectiveDues = totalDues + memberExpenses;
-    const balance = memberDeposits - effectiveDues;
+    const totalMemberDues = memberDues + totalDues;
 
-    let details: ArrearsDetail[] = [];
-    if (settings?.startDate && settings?.duesAmount && settings?.duesFrequency) {
-      const periods =
-        settings.duesFrequency === 'weekly'
-          ? getWeeks(settings.startDate)
-          : getMonths(settings.startDate);
+    const balance = memberDeposits - totalMemberDues;
 
-      const memberPaymentsInPeriods = periods.map(period => {
-        const payment = transactions.find(t => 
-            t.type === 'Pemasukan' && 
-            t.memberId === member.id &&
-            t.description?.includes(period.label.split(':')[0]) && // e.g. "Minggu" or "Agustus"
-            new Date(t.date) >= period.start && new Date(t.date) <= period.end
-        );
-        return { ...period, isPaid: !!payment };
-      });
-      
-      details = memberPaymentsInPeriods.map(p => ({ label: p.label, isPaid: p.isPaid }));
+    let status = 'Lunas';
+    let description = 'Anda tidak memiliki tunggakan.';
+    let color = 'text-green-600';
+
+    if (balance < 0) {
+      status = 'Tunggakan';
+      description = `Anda memiliki tunggakan sebesar ${formatCurrency(Math.abs(balance))}.`;
+      color = 'text-red-600';
+    } else if (balance > 0) {
+      status = 'Lebih Bayar';
+      description = `Anda memiliki kelebihan pembayaran sebesar ${formatCurrency(balance)}.`;
+      color = 'text-blue-600';
     }
 
-
     return {
-      totalDeposits: memberDeposits,
+      deposits: memberDeposits,
+      dues: totalMemberDues,
       finalBalance: balance,
-      arrearsDetails: details,
+      balanceStatus: { label: status, color: color },
+      balanceDescription: description,
     };
-  }, [member.id, transactions, totalDues, settings]);
+  }, [member.id, transactions, totalDues]);
+  
+  const paymentPeriods = useMemo(() => {
+    if (!settings?.startDate || !settings?.duesFrequency) return [];
+    if (settings.duesFrequency === 'weekly') {
+      return getWeeks(settings.startDate);
+    }
+    return getMonths(settings.startDate);
+  }, [settings]);
 
-  const balanceStatus =
-    finalBalance >= 0
-      ? {
-          text: 'Lunas',
-          color: 'text-green-600',
-          icon: <CheckCircle2 className="mr-2" />,
-        }
-      : {
-          text: 'Tunggakan',
-          color: 'text-red-600',
-          icon: <AlertCircle className="mr-2" />,
-        };
+  const unpaidPeriods = useMemo(() => {
+    const memberPayments = transactions.filter(t => t.memberId === member.id && t.type === 'Pemasukan');
+    
+    return paymentPeriods.filter(period => {
+        const hasPaid = memberPayments.some(p => {
+            const paymentDate = new Date(p.date);
+            return paymentDate >= period.start && paymentDate <= period.end;
+        });
+        return !hasPaid;
+    });
+  }, [paymentPeriods, transactions, member.id]);
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Memuat Dashboard...</CardTitle>
+          <CardDescription>Menghitung data keuangan Anda.</CardDescription>
+        </CardHeader>
+        <CardContent className="flex items-center justify-center p-8">
+           <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
-    <Card className="w-full shadow-lg">
-      <CardHeader>
-        <CardTitle className="text-2xl font-headline">
-          Dashboard Keuangan, {member.name}
-        </CardTitle>
-        <CardDescription>
-          Ringkasan status iuran dan keuangan Anda di kelas.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        {isLoading ? (
-          <div className="flex justify-center items-center p-8">
-            <Loader2 className="h-8 w-8 animate-spin" />
-          </div>
-        ) : (
+    <>
+      <Card>
+        <CardHeader>
+          <CardTitle>Halo, {member.name}!</CardTitle>
+          <CardDescription>
+            Ini adalah ringkasan keuangan pribadimu di kelas.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-6">
           <div className="grid md:grid-cols-3 gap-4 text-center">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-lg flex items-center justify-center">
-                  <TrendingUp className="mr-2 text-green-500" />
-                  Total Setoran
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-bold">
-                  {formatCurrency(totalDeposits)}
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-lg flex items-center justify-center">
-                  <TrendingDown className="mr-2 text-red-500" />
-                  Total Tunggakan
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-bold">
-                  {formatCurrency(finalBalance < 0 ? Math.abs(finalBalance) : 0)}
-                </p>
-              </CardContent>
-            </Card>
-            <Card className="md:col-span-1">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-lg flex items-center justify-center">
-                  <Wallet className="mr-2 text-blue-500" />
-                  Saldo Akhir
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className={`text-2xl font-bold ${balanceStatus.color}`}>
-                  {formatCurrency(finalBalance)}
-                </p>
-                <div
-                  className={`flex items-center justify-center text-sm font-semibold ${balanceStatus.color}`}
-                >
-                  {balanceStatus.icon}
-                  <span>{balanceStatus.text}</span>
-                </div>
-              </CardContent>
-            </Card>
+            <div className="p-4 bg-gray-50 rounded-lg">
+              <h3 className="text-sm font-medium text-muted-foreground">Total Setoran</h3>
+              <p className="text-2xl font-bold text-green-600">{formatCurrency(deposits)}</p>
+            </div>
+            <div className="p-4 bg-gray-50 rounded-lg">
+              <h3 className="text-sm font-medium text-muted-foreground">Total Iuran/Tunggakan</h3>
+              <p className="text-2xl font-bold text-red-600">{formatCurrency(dues)}</p>
+            </div>
+            <div className="p-4 bg-gray-50 rounded-lg">
+              <h3 className="text-sm font-medium text-muted-foreground">Saldo Akhir</h3>
+              <p className={`text-2xl font-bold ${balanceStatus.color}`}>{formatCurrency(finalBalance)}</p>
+            </div>
           </div>
-        )}
-        {finalBalance < 0 && !isLoading && (
-          <div className="text-center mt-6">
-            <Dialog>
-              <DialogTrigger asChild>
-                <Button>Lihat Rincian Tunggakan</Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Rincian Tunggakan - {member.name}</DialogTitle>
-                </DialogHeader>
-                <div className="max-h-96 overflow-y-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Periode</TableHead>
-                        <TableHead className="text-right">Status</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {arrearsDetails.map((item, index) =>
-                        !item.isPaid ? (
-                          <TableRow key={index}>
-                            <TableCell>{item.label}</TableCell>
-                            <TableCell className="text-right">
-                              <span className="font-semibold text-red-600">
-                                Belum Lunas
-                              </span>
-                            </TableCell>
-                          </TableRow>
-                        ) : null
-                      )}
-                    </TableBody>
-                  </Table>
-                </div>
-              </DialogContent>
-            </Dialog>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+          <Alert className={`${balanceStatus.color.replace('text-', 'border-').replace('-600', '-200')} ${balanceStatus.color.replace('text-', 'bg-').replace('-600', '-50')}`}>
+            <Info className={`h-4 w-4 ${balanceStatus.color}`} />
+            <AlertTitle className={balanceStatus.color}>{balanceStatus.label}</AlertTitle>
+            <AlertDescription>
+              {balanceDescription}
+              {finalBalance < 0 && (
+                <DuesDetailDialog 
+                  unpaidPeriods={unpaidPeriods} 
+                  duesAmount={settings?.duesAmount ?? 0}
+                />
+              )}
+            </AlertDescription>
+          </Alert>
+        </CardContent>
+      </Card>
+    </>
   );
 }
-
-    
