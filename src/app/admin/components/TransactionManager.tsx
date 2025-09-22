@@ -94,10 +94,6 @@ const transactionSchema = z.object({
     if (data.type === 'Pemasukan') {
         return !!data.memberId;
     }
-    // Member is optional for "Pengeluaran", but if it exists, it must be a string
-    if (data.type === 'Pengeluaran' && data.memberId !== undefined) {
-        return typeof data.memberId === 'string';
-    }
     return true;
 }, {
     message: 'Anggota wajib dipilih untuk pemasukan.',
@@ -405,3 +401,5 @@ export default function TransactionManager({ initialTransactions, members }: Tra
     </Card>
   );
 }
+
+    
