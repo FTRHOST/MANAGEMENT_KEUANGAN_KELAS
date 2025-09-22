@@ -11,7 +11,7 @@ export type Transaction = {
   description: string;
   memberId?: string;
   memberName?: string;
-  treasurer?: 'Bendahara A' | 'Bendahara B';
+  treasurer?: 'Bendahara 1' | 'Bendahara 2';
 };
 
 export type TransactionData = Omit<Transaction, 'id' | 'date'> & {

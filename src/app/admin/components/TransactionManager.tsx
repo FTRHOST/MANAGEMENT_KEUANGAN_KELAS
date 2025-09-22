@@ -87,7 +87,7 @@ const transactionSchema = z.object({
   date: z.date({ required_error: 'Tanggal wajib diisi.' }),
   description: z.string().min(3, 'Deskripsi minimal 3 karakter.'),
   memberId: z.string().optional(),
-  treasurer: z.enum(['Bendahara A', 'Bendahara B']).optional(),
+  treasurer: z.enum(['Bendahara 1', 'Bendahara 2']).optional(),
 }).refine(data => {
     if (data.type === 'Pemasukan') {
         return !!data.memberId;
@@ -280,8 +280,8 @@ export default function TransactionManager({ initialTransactions, members }: Tra
                           <Select onValueChange={field.onChange} defaultValue={field.value}>
                             <FormControl><SelectTrigger><SelectValue placeholder="Pilih bendahara" /></SelectTrigger></FormControl>
                             <SelectContent>
-                                <SelectItem value="Bendahara A">Bendahara A</SelectItem>
-                                <SelectItem value="Bendahara B">Bendahara B</SelectItem>
+                                <SelectItem value="Bendahara 1">Bendahara 1</SelectItem>
+                                <SelectItem value="Bendahara 2">Bendahara 2</SelectItem>
                             </SelectContent>
                           </Select>
                           <FormMessage />
