@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState } from 'react';
@@ -186,7 +187,7 @@ export default function TransactionManager({ initialTransactions, members }: Tra
                         {transaction.type}
                     </Badge>
                   </TableCell>
-                  <TableCell className="font-medium">{transaction.type === 'Pemasukan' ? transaction.memberName : transaction.description}</TableCell>
+                  <TableCell className="font-medium">{transaction.memberName ?? transaction.description}</TableCell>
                   <TableCell>{transaction.treasurer || '-'}</TableCell>
                   <TableCell className={`text-right font-semibold ${transaction.type === 'Pemasukan' ? 'text-green-600' : 'text-destructive'}`}>
                     {transaction.type === 'Pemasukan' ? '+' : '-'} {formatCurrency(transaction.amount)}
@@ -271,6 +272,19 @@ export default function TransactionManager({ initialTransactions, members }: Tra
                         </FormItem>
                       )}
                     />
+                     <FormField
+                        control={form.control}
+                        name="description"
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Deskripsi (e.g. Iuran Minggu 1)</FormLabel>
+                                <FormControl>
+                                    <Input {...field} />
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
                     <FormField
                       control={form.control}
                       name="treasurer"
@@ -291,6 +305,23 @@ export default function TransactionManager({ initialTransactions, members }: Tra
                   </>
                 )}
 
+                {transactionType === 'Pengeluaran' && (
+                   <FormField
+                        control={form.control}
+                        name="description"
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Nama Pengeluaran (e.g. Beli Spidol)</FormLabel>
+                                <FormControl>
+                                    <Input {...field} />
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+                )}
+
+
                 <FormField
                     control={form.control}
                     name="amount"
@@ -299,20 +330,6 @@ export default function TransactionManager({ initialTransactions, members }: Tra
                             <FormLabel>Jumlah</FormLabel>
                             <FormControl>
                                 <Input type="number" placeholder="2000" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                        </FormItem>
-                    )}
-                />
-
-                <FormField
-                    control={form.control}
-                    name="description"
-                    render={({ field }) => (
-                        <FormItem>
-                            <FormLabel>{transactionType === 'Pemasukan' ? 'Deskripsi (e.g. Iuran Minggu 1)' : 'Nama Pengeluaran (e.g. Beli Spidol)'}</FormLabel>
-                            <FormControl>
-                                <Input {...field} />
                             </FormControl>
                             <FormMessage />
                         </FormItem>

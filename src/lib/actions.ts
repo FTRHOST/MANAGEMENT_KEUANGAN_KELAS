@@ -1,3 +1,4 @@
+
 "use server";
 
 import { revalidatePath } from 'next/cache';
@@ -13,6 +14,7 @@ import {
   where,
   getDoc,
   setDoc,
+  writeBatch,
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { Member, Transaction, TransactionData, Settings } from '@/lib/types';
@@ -23,12 +25,19 @@ export async function getSettings(): Promise<Settings> {
   const settingsDoc = await getDoc(doc(db, 'settings', 'config'));
   if (settingsDoc.exists()) {
     const data = settingsDoc.data();
+    // Ensure duesAmount is a number, default to 0 if it's missing or not a number
+    const duesAmount = typeof data.duesAmount === 'number' ? data.duesAmount : 0;
     return {
       ...data,
+      duesAmount,
       startDate: data.startDate?.toDate()?.toISOString(),
     }
   }
-  return {};
+  // Default settings if the document doesn't exist
+  return {
+    duesAmount: 2000,
+    duesFrequency: 'weekly',
+  };
 }
 
 export async function updateSettings(settings: Settings) {
@@ -90,13 +99,77 @@ export async function addTransaction(transaction: Omit<Transaction, 'id' | 'date
     if(memberDoc.exists()) {
         dataToSave.memberName = memberDoc.data().name;
     }
+     await addDoc(collection(db, 'transactions'), dataToSave);
   } else if (transaction.type === 'Pengeluaran') {
-    dataToSave.memberId = null;
-    dataToSave.memberName = null;
-    dataToSave.treasurer = null;
+    // Fair expense logic
+    const transactionsCol = collection(db, 'transactions');
+    const transactionsSnapshot = await getDocs(transactionsCol);
+    const allTransactions = transactionsSnapshot.docs.map(d => d.data() as Transaction);
+    
+    const totalIncome = allTransactions.filter(t => t.type === 'Pemasukan').reduce((sum, t) => sum + t.amount, 0);
+    const totalExpenses = allTransactions.filter(t => t.type === 'Pengeluaran').reduce((sum, t) => sum + t.amount, 0);
+    const currentBalance = totalIncome - totalExpenses;
+
+    const expenseAmount = transaction.amount;
+    
+    if (currentBalance >= expenseAmount) {
+      // Balance is sufficient, just add the expense transaction
+      dataToSave.memberId = null;
+      dataToSave.memberName = null;
+      dataToSave.treasurer = null;
+      await addDoc(collection(db, 'transactions'), dataToSave);
+    } else {
+      // Balance is not sufficient
+      const shortfall = expenseAmount - currentBalance;
+      const membersSnapshot = await getDocs(collection(db, 'members'));
+      const members = membersSnapshot.docs.map(d => ({ id: d.id, ...d.data() } as Member));
+      const memberCount = members.length;
+
+      if(memberCount === 0) {
+        // No members to divide the cost, just add the expense
+        dataToSave.memberId = null;
+        dataToSave.memberName = null;
+        dataToSave.treasurer = null;
+        await addDoc(collection(db, 'transactions'), dataToSave);
+        return;
+      }
+
+      const costPerMember = Math.ceil(shortfall / memberCount);
+      
+      const batch = writeBatch(db);
+
+      // 1. Add the initial expense transaction (for the amount covered by balance if any)
+      const initialExpense = {
+        ...dataToSave,
+        amount: currentBalance > 0 ? currentBalance : 0,
+        description: `${transaction.description} (dari kas)`,
+        memberId: null,
+        memberName: null,
+        treasurer: null,
+      };
+      if (initialExpense.amount > 0) {
+        batch.set(doc(collection(db, 'transactions')), initialExpense);
+      }
+
+      // 2. Add expense for each member
+      const memberExpenseDescription = `Iuran untuk: ${transaction.description}`;
+      for (const member of members) {
+        const memberExpense = {
+          type: 'Pengeluaran',
+          amount: costPerMember,
+          date: Timestamp.fromDate(transaction.date),
+          description: memberExpenseDescription,
+          memberId: member.id,
+          memberName: member.name,
+          treasurer: null,
+        };
+        batch.set(doc(collection(db, 'transactions')), memberExpense);
+      }
+      
+      await batch.commit();
+    }
   }
 
-  await addDoc(collection(db, 'transactions'), dataToSave);
   revalidatePath('/admin');
   revalidatePath('/anggota', 'layout');
 }
@@ -119,8 +192,8 @@ export async function updateTransaction(id: string, transaction: Omit<Transactio
     }
 
     if (transaction.type === 'Pengeluaran') {
-        dataToUpdate.memberId = null;
-        dataToUpdate.memberName = null;
+        dataToUpdate.memberId = dataToUpdate.memberId || null;
+        dataToUpdate.memberName = dataToUpdate.memberName || null;
         dataToUpdate.treasurer = null;
     }
 
