@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState } from 'react';
@@ -25,47 +24,46 @@ export default function NameSearch({ members }: NameSearchProps) {
 
   const handleSelect = (memberId: string) => {
     router.push(`/anggota/${memberId}`);
+    setOpen(false);
+    setInputValue('');
   };
-
-  const filteredMembers = inputValue
-    ? members.filter((member) =>
-        member.name.toLowerCase().includes(inputValue.toLowerCase())
-      )
-    : [];
 
   return (
     <div className="w-full max-w-md">
       <Command shouldFilter={false} className="rounded-lg border shadow-md">
-        <CommandInput
-          placeholder="Cari nama atau NIM..."
-          value={inputValue}
-          onValueChange={setInputValue}
-          onFocus={() => setOpen(true)}
-        />
-        <CommandList>
-          {open && (
-            <>
-              {filteredMembers.length === 0 && inputValue.length > 2 && (
-                <CommandEmpty>Nama tidak ditemukan.</CommandEmpty>
-              )}
-              {filteredMembers.length > 0 && (
-                <CommandGroup heading="Anggota Ditemukan">
-                  {filteredMembers.map((member) => (
-                    <CommandItem
-                      key={member.id}
-                      onSelect={() => handleSelect(member.id)}
-                      value={member.name}
-                      className="flex items-center gap-2"
-                    >
-                      <User className="h-4 w-4" />
-                      <span>{member.name}</span>
-                    </CommandItem>
-                  ))}
-                </CommandGroup>
-              )}
-            </>
-          )}
-        </CommandList>
+        <div className="relative">
+          <CommandInput
+            value={inputValue}
+            onValueChange={setInputValue}
+            onFocus={() => setOpen(true)}
+            onBlur={() => setTimeout(() => setOpen(false), 150)}
+            placeholder="Cari nama atau NIM..."
+            className="h-14 text-lg"
+          />
+        </div>
+        {open && inputValue.length > 0 && (
+          <CommandList>
+            <CommandEmpty>Tidak ada anggota yang cocok.</CommandEmpty>
+            <CommandGroup>
+              {members
+                .filter(
+                  (member) =>
+                    member.name.toLowerCase().includes(inputValue.toLowerCase())
+                )
+                .map((member) => (
+                  <CommandItem
+                    key={member.id}
+                    value={member.name}
+                    onSelect={() => handleSelect(member.id)}
+                    className="flex items-center gap-3 py-3"
+                  >
+                    <User className="h-5 w-5 text-muted-foreground" />
+                    <span>{member.name}</span>
+                  </CommandItem>
+                ))}
+            </CommandGroup>
+          </CommandList>
+        )}
       </Command>
     </div>
   );
