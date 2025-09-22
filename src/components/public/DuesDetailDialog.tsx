@@ -1,15 +1,15 @@
+
 "use client";
 
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
   DialogFooter,
   DialogClose,
 } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
 import {
   Table,
   TableBody,
@@ -18,61 +18,60 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { Button } from '@/components/ui/button';
 
 type ArrearsDetail = {
-  label: string;
+  description: string;
+  amount: number;
 };
 
 type DuesDetailDialogProps = {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
   arrearsDetails: ArrearsDetail[];
-  memberName: string;
+  duesPerMeeting?: number;
 };
 
-export function DuesDetailDialog({
-  isOpen,
-  onOpenChange,
-  arrearsDetails,
-  memberName,
-}: DuesDetailDialogProps) {
+function formatCurrency(amount: number) {
+  return new Intl.NumberFormat('id-ID', {
+    style: 'currency',
+    currency: 'IDR',
+    minimumFractionDigits: 0,
+  }).format(amount);
+}
+
+export function DuesDetailDialog({ isOpen, onOpenChange, arrearsDetails, duesPerMeeting }: DuesDetailDialogProps) {
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent>
         <DialogHeader>
-          <DialogTitle>Rincian Tunggakan - {memberName}</DialogTitle>
+          <DialogTitle>Rincian Tunggakan</DialogTitle>
           <DialogDescription>
-            Berikut adalah rincian periode iuran yang belum lunas.
+            Berikut adalah rincian iuran yang belum Anda bayarkan. Total iuran per pertemuan adalah {formatCurrency(duesPerMeeting || 0)}.
           </DialogDescription>
         </DialogHeader>
-        <div className="max-h-60 overflow-y-auto">
+        <div className="max-h-[300px] overflow-y-auto">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Periode Iuran</TableHead>
+                <TableHead>Deskripsi</TableHead>
+                <TableHead className="text-right">Jumlah</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {arrearsDetails && arrearsDetails.length > 0 ? (
-                arrearsDetails.map((item, index) => (
-                  <TableRow key={index}>
-                    <TableCell>{item.label}</TableCell>
-                  </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell>Tidak ada tunggakan.</TableCell>
+              {arrearsDetails.map((detail, index) => (
+                <TableRow key={index}>
+                  <TableCell>{detail.description}</TableCell>
+                  <TableCell className="text-right">{formatCurrency(detail.amount)}</TableCell>
                 </TableRow>
-              )}
+              ))}
             </TableBody>
           </Table>
         </div>
         <DialogFooter>
-          <DialogClose asChild>
-            <Button type="button" variant="secondary">
-              Tutup
-            </Button>
-          </DialogClose>
+            <DialogClose asChild>
+                <Button type="button" variant="secondary">Tutup</Button>
+            </DialogClose>
         </DialogFooter>
       </DialogContent>
     </Dialog>
