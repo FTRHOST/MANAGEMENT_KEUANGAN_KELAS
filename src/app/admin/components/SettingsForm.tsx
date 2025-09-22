@@ -1,11 +1,21 @@
+
 "use client";
 
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { Loader2 } from 'lucide-react';
+import { format } from 'date-fns';
+import { id } from 'date-fns/locale';
+import { CalendarIcon, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   Form,
   FormControl,
@@ -14,13 +24,22 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
 import { useToast } from '@/hooks/use-toast';
 import { updateSettings } from '@/lib/actions';
 import type { Settings } from '@/lib/types';
 import { useRouter } from 'next/navigation';
+import { cn } from '@/lib/utils';
 
 const settingsSchema = z.object({
   duesAmount: z.coerce.number().min(0, 'Jumlah iuran tidak boleh negatif.'),
+  startDate: z.date().nullable(),
+  duesFrequency: z.enum(['weekly', 'monthly']),
 });
 
 type SettingsFormProps = {
@@ -35,6 +54,8 @@ export default function SettingsForm({ currentSettings }: SettingsFormProps) {
     resolver: zodResolver(settingsSchema),
     defaultValues: {
       duesAmount: currentSettings.duesAmount || 2000,
+      startDate: currentSettings.startDate ? new Date(currentSettings.startDate) : null,
+      duesFrequency: currentSettings.duesFrequency || 'weekly',
     },
   });
 
@@ -44,6 +65,7 @@ export default function SettingsForm({ currentSettings }: SettingsFormProps) {
     try {
       const settingsToSave: Settings = {
         ...values,
+        startDate: values.startDate ? values.startDate.toISOString() : null
       };
       await updateSettings(settingsToSave);
       toast({
@@ -68,10 +90,74 @@ export default function SettingsForm({ currentSettings }: SettingsFormProps) {
           name="duesAmount"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Jumlah Iuran per Pertemuan (Rp)</FormLabel>
+              <FormLabel>Jumlah Iuran (Rp)</FormLabel>
               <FormControl>
                 <Input type="number" placeholder="2000" {...field} />
               </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        
+        <FormField
+          control={form.control}
+          name="duesFrequency"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Frekuensi Iuran</FormLabel>
+              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Pilih frekuensi iuran" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  <SelectItem value="weekly">Mingguan</SelectItem>
+                  <SelectItem value="monthly">Bulanan</SelectItem>
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="startDate"
+          render={({ field }) => (
+            <FormItem className="flex flex-col">
+              <FormLabel>Tanggal Mulai Kas</FormLabel>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <FormControl>
+                    <Button
+                      variant={'outline'}
+                      className={cn(
+                        'w-[240px] pl-3 text-left font-normal',
+                        !field.value && 'text-muted-foreground'
+                      )}
+                    >
+                      {field.value ? (
+                        format(field.value, 'PPP', { locale: id })
+                      ) : (
+                        <span>Pilih tanggal</span>
+                      )}
+                      <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                    </Button>
+                  </FormControl>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={field.value ?? undefined}
+                    onSelect={field.onChange}
+                    disabled={(date) =>
+                      date > new Date() || date < new Date('1900-01-01')
+                    }
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
               <FormMessage />
             </FormItem>
           )}
@@ -85,3 +171,4 @@ export default function SettingsForm({ currentSettings }: SettingsFormProps) {
     </Form>
   );
 }
+

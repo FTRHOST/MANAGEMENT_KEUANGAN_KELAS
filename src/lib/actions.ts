@@ -19,7 +19,6 @@ import {
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { Member, Transaction, TransactionData, Settings, CashierDay } from '@/lib/types';
-import { calculateMemberDues } from '@/ai/flows/calculate-member-dues';
 
 // Settings Actions
 export async function getSettings(): Promise<Settings> {
@@ -28,16 +27,23 @@ export async function getSettings(): Promise<Settings> {
     const data = settingsDoc.data();
     // Ensure duesAmount is a number, default to 0 if it's missing or not a number
     const duesAmount = typeof data.duesAmount === 'number' ? data.duesAmount : 0;
-    const settings = {
-        ...data,
+    
+    // Convert Timestamp to ISO string if it exists
+    const startDate = data.startDate instanceof Timestamp ? data.startDate.toDate().toISOString() : null;
+
+    const settings: Settings = {
         duesAmount,
-    } as Settings;
+        duesFrequency: data.duesFrequency || 'weekly',
+        startDate: startDate,
+    };
     
     return settings;
   }
   // Default settings if the document doesn't exist
   return {
     duesAmount: 2000,
+    duesFrequency: 'weekly',
+    startDate: new Date().toISOString(),
   };
 }
 
@@ -46,6 +52,7 @@ export async function updateSettings(settings: Settings) {
   const dataToSave: any = {
     ...settings,
     duesAmount: Number(settings.duesAmount) || 0,
+    startDate: settings.startDate ? Timestamp.fromDate(new Date(settings.startDate)) : null,
   };
   await setDoc(settingsDoc, dataToSave, { merge: true });
   revalidatePath('/admin/settings');
@@ -115,24 +122,26 @@ export async function addTransaction(transaction: Omit<Transaction, 'id' | 'date
     const currentBalance = totalIncome - totalExpenses;
 
     const expenseAmount = transaction.amount;
+    const expenseDescription = transaction.description;
     
     const batch = writeBatch(db);
 
-    const expenseFromBalance = Math.min(currentBalance, expenseAmount);
-    const shortfall = expenseAmount - expenseFromBalance;
-
-    if (expenseFromBalance > 0) {
-      const initialExpense = {
+    // Use from balance first
+    const fromBalance = Math.min(currentBalance, expenseAmount);
+    if (fromBalance > 0) {
+      const expenseFromBalance = {
         ...dataToSave,
-        amount: expenseFromBalance,
-        description: `${transaction.description} (dari kas)`,
+        amount: fromBalance,
+        description: `${expenseDescription} (dari kas)`,
         memberId: null,
         memberName: null,
         treasurer: null,
       };
-      batch.set(doc(collection(db, 'transactions')), initialExpense);
+      batch.set(doc(collection(db, 'transactions')), expenseFromBalance);
     }
 
+    // Distribute shortfall to members
+    const shortfall = expenseAmount - fromBalance;
     if (shortfall > 0) {
       const membersSnapshot = await getDocs(collection(db, 'members'));
       const members = membersSnapshot.docs.map(d => ({ id: d.id, ...d.data() } as Member));
@@ -140,7 +149,7 @@ export async function addTransaction(transaction: Omit<Transaction, 'id' | 'date
 
       if (memberCount > 0) {
         const costPerMember = Math.ceil(shortfall / memberCount);
-        const memberExpenseDescription = `Iuran untuk: ${transaction.description}`;
+        const memberExpenseDescription = `Iuran untuk: ${expenseDescription}`;
         
         for (const member of members) {
           const memberExpense = {
@@ -233,3 +242,4 @@ export async function deleteCashierDay(id: string) {
     revalidatePath('/admin');
     revalidatePath('/anggota', 'layout');
 }
+

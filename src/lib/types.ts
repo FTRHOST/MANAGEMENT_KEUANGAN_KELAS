@@ -1,3 +1,4 @@
+
 export type Member = {
   id: string;
   name: string;
@@ -20,6 +21,8 @@ export type TransactionData = Omit<Transaction, 'id' | 'date'> & {
 
 export type Settings = {
   duesAmount?: number;
+  startDate?: string | null; // Can be string (ISO date) or null
+  duesFrequency?: 'weekly' | 'monthly';
 };
 
 export type CashierDay = {
@@ -27,3 +30,4 @@ export type CashierDay = {
   date: string;
   description: string;
 };
+
