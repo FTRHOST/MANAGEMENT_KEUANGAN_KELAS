@@ -40,6 +40,8 @@ import { Textarea } from '@/components/ui/textarea';
 const settingsSchema = z.object({
   appName: z.string().min(3, 'Nama aplikasi minimal 3 karakter.'),
   logoUrl: z.string().url('URL logo tidak valid.').or(z.literal('')),
+  heroTitle: z.string().min(3, 'Judul minimal 3 karakter.'),
+  heroDescription: z.string().min(10, 'Deskripsi minimal 10 karakter.'),
   duesAmount: z.coerce.number().min(0, 'Jumlah iuran tidak boleh negatif.'),
   startDate: z.date({ coerce: true }).nullable(),
   duesFrequency: z.enum(['weekly', 'monthly']),
@@ -58,6 +60,8 @@ export default function SettingsForm({ currentSettings }: SettingsFormProps) {
     defaultValues: {
       appName: currentSettings.appName || 'Class Cashier',
       logoUrl: currentSettings.logoUrl || '',
+      heroTitle: currentSettings.heroTitle || 'Bendahara Cerdas',
+      heroDescription: currentSettings.heroDescription || 'Transparansi keuangan kelas di ujung jari Anda. Cari nama Anda untuk melihat status iuran.',
       duesAmount: currentSettings.duesAmount || 2000,
       startDate: currentSettings.startDate ? new Date(currentSettings.startDate) : null,
       duesFrequency: currentSettings.duesFrequency || 'weekly',
@@ -108,6 +112,37 @@ export default function SettingsForm({ currentSettings }: SettingsFormProps) {
               <FormLabel>URL Logo</FormLabel>
               <FormControl>
                 <Input placeholder="https://example.com/logo.png" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        
+        <FormField
+          control={form.control}
+          name="heroTitle"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Judul Halaman Utama</FormLabel>
+              <FormControl>
+                <Input placeholder="Bendahara Cerdas" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="heroDescription"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Deskripsi Halaman Utama</FormLabel>
+              <FormControl>
+                <Textarea
+                  placeholder="Transparansi keuangan kelas di ujung jari Anda..."
+                  {...field}
+                />
               </FormControl>
               <FormMessage />
             </FormItem>

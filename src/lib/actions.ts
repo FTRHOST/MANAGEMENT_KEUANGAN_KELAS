@@ -37,6 +37,8 @@ export async function getSettings(): Promise<Settings> {
         duesAmount,
         duesFrequency: data.duesFrequency || 'weekly',
         startDate: startDate,
+        heroTitle: data.heroTitle || 'Bendahara Cerdas',
+        heroDescription: data.heroDescription || 'Transparansi keuangan kelas di ujung jari Anda. Cari nama Anda untuk melihat status iuran.',
     };
     
     return settings;
@@ -48,6 +50,8 @@ export async function getSettings(): Promise<Settings> {
     duesAmount: 2000,
     duesFrequency: 'weekly',
     startDate: null,
+    heroTitle: 'Bendahara Cerdas',
+    heroDescription: 'Transparansi keuangan kelas di ujung jari Anda. Cari nama Anda untuk melihat status iuran.',
   };
 }
 

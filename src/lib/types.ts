@@ -25,6 +25,8 @@ export type Settings = {
   duesAmount: number;
   startDate: string | null; // Can be string (ISO date) or null
   duesFrequency: 'weekly' | 'monthly';
+  heroTitle: string;
+  heroDescription: string;
 };
 
 export type CashierDay = {
