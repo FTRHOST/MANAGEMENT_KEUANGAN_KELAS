@@ -1,15 +1,16 @@
-
 "use client";
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import type { Member, Transaction, Settings, CashierDay } from '@/lib/types';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Terminal, Info, Loader2, User, Wallet, Calendar, AlertCircle } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Terminal, Info, Loader2, Scale } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DuesDetailDialog } from '@/components/public/DuesDetailDialog';
+import { getSettings } from '@/lib/actions';
+
 
 function formatCurrency(amount: number) {
   return new Intl.NumberFormat('id-ID', {
@@ -18,20 +19,6 @@ function formatCurrency(amount: number) {
     minimumFractionDigits: 0,
   }).format(amount);
 }
-
-function formatDate(dateString: string) {
-    return new Date(dateString).toLocaleDateString('id-ID', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-    });
-}
-
-type ArrearsDetail = {
-  label: string;
-  amount: number;
-  paid: boolean;
-};
 
 type PersonalDashboardProps = {
   member: Member;
@@ -44,186 +31,177 @@ export function PersonalDashboard({
   member,
   transactions,
   cashierDays,
-  settings,
+  settings: initialSettings,
 }: PersonalDashboardProps) {
   const [isDetailOpen, setDetailOpen] = useState(false);
 
   const {
-    totalDues,
     totalPaid,
-    balance,
+    paymentStatus,
     arrearsDetails,
-    paymentPercentage,
-    memberTransactions
+    totalDues,
+    finalBalance,
   } = useMemo(() => {
-    const duesAmount = settings.duesAmount || 0;
-    const sortedCashierDays = cashierDays.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    const duesAmount = initialSettings.duesAmount || 0;
+    
+    // Calculate total expected dues based on the number of cashier days
+    const totalDues = cashierDays.length * duesAmount;
 
-    const calculatedTotalDues = sortedCashierDays.length * duesAmount;
-
+    // Calculate total paid by the member
     const memberPayments = transactions.filter(
       (t) => t.memberId === member.id && t.type === 'Pemasukan'
     );
-    const calculatedTotalPaid = memberPayments.reduce((sum, t) => sum + t.amount, 0);
+    const totalPaid = memberPayments.reduce((sum, t) => sum + t.amount, 0);
 
-    const calculatedBalance = calculatedTotalPaid - calculatedTotalDues;
+    // Calculate personal expenses for the member
+    const memberExpenses = transactions.filter(
+        (t) => t.memberId === member.id && t.type === 'Pengeluaran'
+    );
+    const totalPersonalExpenses = memberExpenses.reduce((sum, t) => sum + t.amount, 0);
 
-    const details: ArrearsDetail[] = sortedCashierDays.map(day => {
-      // Find if a payment was made around this cashier day.
-      // This is a simplified logic. A more robust solution might be needed.
-      // For now, we assume one payment covers one due.
-      const paymentForThisDay = memberPayments.find(p => {
-        const paymentDate = new Date(p.date);
-        const dayDate = new Date(day.date);
-        // A simple check if payment is on the same day.
-        return paymentDate.toISOString().split('T')[0] === dayDate.toISOString().split('T')[0];
-      });
 
-      // A more accurate way to calculate if a due is paid
-      // is to count paid dues and compare with the index.
-      const paidDuesCount = Math.floor(calculatedTotalPaid / duesAmount);
-      const currentIndex = sortedCashierDays.findIndex(d => d.id === day.id);
-
+    // Determine payment status for each cashier day
+    const paymentStatus = cashierDays.map(day => {
+      const hasPaid = memberPayments.some(p => new Date(p.date) <= new Date(day.date) && p.description?.trim().toLowerCase() === day.description?.trim().toLowerCase());
+       // A simple heuristic: check if a payment for this member exists for the same description.
+       // This is not foolproof but works for most cases. A more robust system might link payments to specific cashier days.
+      const hasMadeAnyPaymentOnDay = memberPayments.some(p => new Date(p.date).toDateString() === new Date(day.date).toDateString());
       return {
-        label: `${day.description} (${formatDate(day.date)})`,
-        amount: duesAmount,
-        paid: currentIndex < paidDuesCount,
+        ...day,
+        status: hasMadeAnyPaymentOnDay ? 'Lunas' : 'Belum Lunas'
       };
     });
+    
+    // Filter for unpaid cashier days
+    const arrearsDetails = paymentStatus.filter(p => p.status === 'Belum Lunas').map(p => ({label: p.description, amount: duesAmount}));
 
-    const arrears = details.filter(d => !d.paid);
-
-    const percentage = calculatedTotalDues > 0 ? (calculatedTotalPaid / calculatedTotalDues) * 100 : 100;
-
-    const personalTransactions = transactions.filter(t => t.memberId === member.id);
-
-    return {
-      totalDues: calculatedTotalDues,
-      totalPaid: calculatedTotalPaid,
-      balance: calculatedBalance,
-      arrearsDetails: arrears,
-      paymentPercentage: percentage,
-      memberTransactions: personalTransactions,
-    };
-  }, [member.id, transactions, cashierDays, settings.duesAmount]);
+     // Add personal expenses to arrears
+     memberExpenses.forEach(expense => {
+        arrearsDetails.push({ label: `Beban: ${expense.description}`, amount: expense.amount });
+    });
 
 
-  if (!settings) {
-    return (
-        <Card>
-            <CardHeader>
-                <CardTitle>Memuat Data...</CardTitle>
-            </CardHeader>
-            <CardContent>
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            </CardContent>
-        </Card>
-    );
-  }
+    // Calculate total class balance
+    const totalIncome = transactions
+      .filter((t) => t.type === 'Pemasukan')
+      .reduce((sum, t) => sum + t.amount, 0);
+    const totalExpenses = transactions
+      .filter((t) => t.type === 'Pengeluaran')
+      .reduce((sum, t) => sum + t.amount, 0);
+    const finalBalance = totalIncome - totalExpenses;
+
+    return { totalPaid, paymentStatus, arrearsDetails, totalDues: totalDues + totalPersonalExpenses, finalBalance };
+  }, [member.id, transactions, cashierDays, initialSettings.duesAmount]);
+
+
+  const totalArrears = arrearsDetails.reduce((sum, item) => sum + item.amount, 0);
+  const progress = totalDues > 0 ? (totalPaid / totalDues) * 100 : 100;
+  const isFullyPaid = totalPaid >= totalDues;
 
   return (
     <>
-      <Card className="w-full">
-        <CardHeader>
-          <div className="flex items-center gap-4">
-             <User className="h-8 w-8 text-primary" />
-             <div>
-                <CardTitle className="text-3xl font-bold font-headline">Halo, {member.name}!</CardTitle>
-                <CardDescription>Ini adalah ringkasan status keuanganmu di kelas.</CardDescription>
-             </div>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {balance >= 0 ? (
-            <Alert>
-              <Terminal className="h-4 w-4" />
-              <AlertTitle>Status: Lunas</AlertTitle>
-              <AlertDescription>
-                Terima kasih! Semua iuran kas Anda sudah lunas.
-                {balance > 0 && ` Anda memiliki kelebihan pembayaran sebesar ${formatCurrency(balance)}.`}
-              </AlertDescription>
-            </Alert>
-          ) : (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertTitle>Status: Ada Tunggakan</AlertTitle>
-              <AlertDescription>
-                Anda memiliki tunggakan sebesar {formatCurrency(Math.abs(balance))}.
-                <Button variant="link" className="p-0 h-auto ml-2" onClick={() => setDetailOpen(true)}>Lihat Rincian</Button>
-              </AlertDescription>
-            </Alert>
-          )}
+      <div className="space-y-4">
+        <div className="space-y-1">
+          <h1 className="text-3xl font-bold font-headline">
+            Dashboard Keuangan: {member.name}
+          </h1>
+          <p className="text-muted-foreground">
+            Ringkasan status iuran dan keuangan kelas Anda.
+          </p>
+        </div>
 
-          <div className="grid gap-4 md:grid-cols-3">
-             <Card className="p-4">
-                <CardHeader className="p-2 pt-0">
-                   <CardTitle className="text-sm font-medium flex items-center gap-2"><Wallet className="h-4 w-4 text-muted-foreground"/>Total Tunggakan</CardTitle>
-                </CardHeader>
-                <CardContent className="p-2 pt-0">
-                    <div className="text-2xl font-bold">{formatCurrency(balance < 0 ? Math.abs(balance) : 0)}</div>
-                </CardContent>
-             </Card>
-             <Card className="p-4">
-                <CardHeader className="p-2 pt-0">
-                   <CardTitle className="text-sm font-medium flex items-center gap-2"><Calendar className="h-4 w-4 text-muted-foreground"/> Total Iuran Seharusnya</CardTitle>
-                </CardHeader>
-                <CardContent className="p-2 pt-0">
-                    <div className="text-2xl font-bold">{formatCurrency(totalDues)}</div>
-                    <p className="text-xs text-muted-foreground">dari {cashierDays.length} pertemuan</p>
-                </CardContent>
-             </Card>
-             <Card className="p-4">
-                <CardHeader className="p-2 pt-0">
-                   <CardTitle className="text-sm font-medium flex items-center gap-2"><Info className="h-4 w-4 text-muted-foreground"/>Total Sudah Dibayar</CardTitle>
-                </CardHeader>
-                 <CardContent className="p-2 pt-0">
-                    <div className="text-2xl font-bold">{formatCurrency(totalPaid)}</div>
-                </CardContent>
-             </Card>
-          </div>
-          
-          <div>
-            <label className="text-sm font-medium">Progress Pembayaran</label>
-            <div className="flex items-center gap-2">
-              <Progress value={paymentPercentage} className="w-full" />
-              <span className="text-sm font-semibold">{Math.round(paymentPercentage)}%</span>
-            </div>
-          </div>
-          
-          <div>
-            <h3 className="text-lg font-semibold mb-2">Riwayat Transaksi Pribadi</h3>
-            <div className="rounded-md border max-h-60 overflow-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Tanggal</TableHead>
-                    <TableHead>Deskripsi</TableHead>
-                    <TableHead className="text-right">Jumlah</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {memberTransactions.length > 0 ? (
-                    memberTransactions.map((t) => (
-                      <TableRow key={t.id}>
-                        <TableCell>{formatDate(t.date)}</TableCell>
-                        <TableCell>{t.description}</TableCell>
-                        <TableCell className={`text-right font-semibold ${t.type === 'Pemasukan' ? 'text-green-600' : 'text-destructive'}`}>
-                           {t.type === 'Pemasukan' ? '+' : '-'} {formatCurrency(t.amount)}
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  ) : (
-                    <TableRow>
-                      <TableCell colSpan={3} className="text-center">Belum ada transaksi.</TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-          </div>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Iuran</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{formatCurrency(totalDues)}</div>
+              <p className="text-xs text-muted-foreground">
+                Total yang seharusnya dibayarkan
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Bayar</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{formatCurrency(totalPaid)}</div>
+              <p className="text-xs text-muted-foreground">
+                Total yang sudah Anda bayarkan
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Tunggakan</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className={`text-2xl font-bold ${totalArrears > 0 ? 'text-destructive' : 'text-green-600'}`}>
+                {formatCurrency(totalArrears)}
+              </div>
+              <p className="text-xs text-muted-foreground">Sisa iuran yang belum dibayar</p>
+            </CardContent>
+          </Card>
+           <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Saldo Kas Kelas</CardTitle>
+               <Scale className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {formatCurrency(finalBalance)}
+              </div>
+               <p className="text-xs text-muted-foreground">Sisa uang kas kelas saat ini</p>
+            </CardContent>
+          </Card>
+        </div>
 
-        </CardContent>
-      </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Progress Pembayaran Anda</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              <Progress value={progress} />
+              <div className="flex justify-between text-sm font-medium">
+                <span>{formatCurrency(totalPaid)}</span>
+                <span>{formatCurrency(totalDues)}</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Alert variant={isFullyPaid ? 'default' : 'destructive'} className={`${isFullyPaid ? 'bg-green-50 border-green-200 text-green-900' : ''}`}>
+          <Terminal className="h-4 w-4" />
+          <AlertTitle>
+            {isFullyPaid ? 'Lunas!' : 'Anda Memiliki Tunggakan'}
+          </AlertTitle>
+          <AlertDescription>
+            {isFullyPaid
+              ? 'Terima kasih! Anda telah melunasi semua iuran kas.'
+              : `Anda memiliki total tunggakan sebesar ${formatCurrency(totalArrears)}. `}
+            {!isFullyPaid && (
+              <Button
+                variant="link"
+                className="p-0 h-auto text-destructive font-bold"
+                onClick={() => setDetailOpen(true)}
+              >
+                Lihat Rincian Tunggakan
+              </Button>
+            )}
+          </AlertDescription>
+        </Alert>
+
+        <Alert variant="default" className="bg-blue-50 border-blue-200 text-blue-900">
+            <Info className="h-4 w-4" />
+            <AlertTitle>Informasi Penting</AlertTitle>
+            <AlertDescription>
+                Jumlah iuran adalah <strong>{formatCurrency(initialSettings.duesAmount || 0)}</strong> per pertemuan yang diadakan. Jika ada pertanyaan, hubungi bendahara kelas.
+            </AlertDescription>
+        </Alert>
+      </div>
       <DuesDetailDialog
         isOpen={isDetailOpen}
         onClose={() => setDetailOpen(false)}
