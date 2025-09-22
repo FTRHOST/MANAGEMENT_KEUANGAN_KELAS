@@ -6,6 +6,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { format } from 'date-fns';
+import { id } from 'date-fns/locale';
 import {
   Table,
   TableBody,
@@ -122,7 +123,7 @@ export default function CashierDayManager({ initialCashierDays }: CashierDayMana
             <TableBody>
               {cashierDays.map((day) => (
                 <TableRow key={day.id}>
-                  <TableCell>{format(new Date(day.date), 'PPP', { locale: require('date-fns/locale/id')})}</TableCell>
+                  <TableCell>{format(new Date(day.date), 'PPP', { locale: id })}</TableCell>
                   <TableCell className="font-medium">{day.description}</TableCell>
                   <TableCell className="text-right">
                     <AlertDialog>
@@ -186,7 +187,7 @@ export default function CashierDayManager({ initialCashierDays }: CashierDayMana
                                     variant={"outline"}
                                     className={cn("w-[240px] pl-3 text-left font-normal", !field.value && "text-muted-foreground")}
                                   >
-                                    {field.value ? format(field.value, "PPP", { locale: require('date-fns/locale/id')}) : <span>Pilih tanggal</span>}
+                                    {field.value ? format(field.value, "PPP", { locale: id }) : <span>Pilih tanggal</span>}
                                     <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                                   </Button>
                                 </FormControl>
