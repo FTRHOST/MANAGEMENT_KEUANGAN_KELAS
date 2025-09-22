@@ -1,9 +1,11 @@
+
 import { collection, getDocs, doc, getDoc, orderBy, query } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { Member, Transaction } from '@/lib/types';
 import { PersonalDashboard } from '@/components/public/PersonalDashboard';
 import { notFound } from 'next/navigation';
 import { ClassFinanceSummary } from '@/components/public/ClassFinanceSummary';
+import { getCashierDays, getSettings } from '@/lib/actions';
 
 async function getData(memberId: string) {
   const memberRef = doc(db, 'members', memberId);
@@ -21,11 +23,14 @@ async function getData(memberId: string) {
     return {
       id: doc.id,
       ...data,
-      date: data.date.toDate().toISOString(),
+      date: data.date.toDate().toISOString(), // Convert Timestamp to ISO string
     } as unknown as Transaction;
   });
 
-  return { member, transactions };
+  const cashierDays = await getCashierDays();
+  const settings = await getSettings();
+
+  return { member, transactions, cashierDays, settings };
 }
 
 export default async function AnggotaPage({ params }: { params: { id: string } }) {
@@ -35,13 +40,15 @@ export default async function AnggotaPage({ params }: { params: { id: string } }
     notFound();
   }
 
-  const { member, transactions } = data;
+  const { member, transactions, cashierDays, settings } = data;
 
   return (
     <div className="space-y-8">
       <PersonalDashboard
         member={member}
         transactions={transactions}
+        cashierDays={cashierDays}
+        settings={settings}
       />
       <ClassFinanceSummary transactions={transactions} />
     </div>
