@@ -17,3 +17,9 @@ export type Transaction = {
 export type TransactionData = Omit<Transaction, 'id' | 'date'> & {
   date: string;
 };
+
+export type Settings = {
+  startDate?: string;
+  duesAmount?: number;
+  duesFrequency?: 'weekly' | 'monthly';
+};

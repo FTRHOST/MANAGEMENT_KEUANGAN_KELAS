@@ -12,10 +12,39 @@ import {
   query,
   where,
   getDoc,
+  setDoc,
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import type { Member, Transaction, TransactionData } from '@/lib/types';
+import type { Member, Transaction, TransactionData, Settings } from '@/lib/types';
 import { calculateMemberDues } from '@/ai/flows/calculate-member-dues';
+
+// Settings Actions
+export async function getSettings(): Promise<Settings> {
+  const settingsDoc = await getDoc(doc(db, 'settings', 'config'));
+  if (settingsDoc.exists()) {
+    const data = settingsDoc.data();
+    return {
+      ...data,
+      startDate: data.startDate?.toDate()?.toISOString(),
+    }
+  }
+  return {};
+}
+
+export async function updateSettings(settings: Settings) {
+  const settingsDoc = doc(db, 'settings', 'config');
+  const dataToSave: any = {
+    ...settings,
+    duesAmount: Number(settings.duesAmount) || 0,
+  };
+  if (settings.startDate) {
+    dataToSave.startDate = Timestamp.fromDate(new Date(settings.startDate));
+  }
+  await setDoc(settingsDoc, dataToSave, { merge: true });
+  revalidatePath('/admin/settings');
+  revalidatePath('/anggota', 'layout');
+}
+
 
 // Member Actions
 export async function addMember(name: string) {
@@ -61,16 +90,10 @@ export async function addTransaction(transaction: Omit<Transaction, 'id' | 'date
     if(memberDoc.exists()) {
         dataToSave.memberName = memberDoc.data().name;
     }
-  } else {
-    // Ensure these fields don't get saved for expenses
-    delete dataToSave.memberId;
-    delete dataToSave.memberName;
-    delete dataToSave.treasurer;
-  }
-
-  if (transaction.type === 'Pengeluaran') {
-    delete dataToSave.memberId;
-    delete dataToSave.treasurer;
+  } else if (transaction.type === 'Pengeluaran') {
+    dataToSave.memberId = null;
+    dataToSave.memberName = null;
+    dataToSave.treasurer = null;
   }
 
   await addDoc(collection(db, 'transactions'), dataToSave);
@@ -113,14 +136,14 @@ export async function deleteTransaction(id: string) {
 }
 
 // AI Dues Calculation Action
-export async function getPeriodicDues(startDate: string | null) {
-  if (!startDate) {
+export async function getPeriodicDues(startDate: string, duesAmount: number, duesFrequency: 'weekly' | 'monthly') {
+  if (!startDate || !duesAmount || !duesFrequency) {
     return { totalDues: 0 };
   }
   try {
     const result = await calculateMemberDues({
       startDate,
-      weeklyRate: 2000,
+      weeklyRate: duesFrequency === 'weekly' ? duesAmount : duesAmount / 4, // simplistic conversion for AI
       currentDate: new Date().toISOString().split('T')[0], // YYYY-MM-DD
     });
     return result;
@@ -129,8 +152,16 @@ export async function getPeriodicDues(startDate: string | null) {
     // Fallback simple calculation
     const start = new Date(startDate);
     const now = new Date();
-    const diffTime = Math.abs(now.getTime() - start.getTime());
-    const diffWeeks = Math.floor(diffTime / (1000 * 60 * 60 * 24 * 7));
-    return { totalDues: diffWeeks * 2000 };
+    if(duesFrequency === 'weekly') {
+      const diffTime = Math.abs(now.getTime() - start.getTime());
+      const diffWeeks = Math.floor(diffTime / (1000 * 60 * 60 * 24 * 7));
+      return { totalDues: diffWeeks * duesAmount };
+    } else {
+      let months;
+      months = (now.getFullYear() - start.getFullYear()) * 12;
+      months -= start.getMonth();
+      months += now.getMonth();
+      return { totalDues: months <= 0 ? 0 : months * duesAmount };
+    }
   }
 }

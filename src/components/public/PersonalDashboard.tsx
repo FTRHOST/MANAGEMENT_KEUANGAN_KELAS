@@ -1,7 +1,6 @@
 "use client";
 
-import { useMemo, useState, useEffect } from 'react';
-import type { Member, Transaction } from '@/lib/types';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Card,
   CardContent,
@@ -17,11 +16,13 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
-import { getPeriodicDues } from '@/lib/actions';
+import type { Member, Transaction, Settings } from '@/lib/types';
+import { getPeriodicDues, getSettings } from '@/lib/actions';
+import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
+import { Info } from 'lucide-react';
 import { Skeleton } from '../ui/skeleton';
-import { AlertCircle, CheckCircle2, TrendingDown, TrendingUp, Wallet } from 'lucide-react';
-import useLocalStorage from '@/hooks/use-local-storage';
 
 function formatCurrency(amount: number) {
   return new Intl.NumberFormat('id-ID', {
@@ -29,6 +30,18 @@ function formatCurrency(amount: number) {
     currency: 'IDR',
     minimumFractionDigits: 0,
   }).format(amount);
+}
+
+function formatDate(dateValue: string | Date) {
+    const date = typeof dateValue === 'string' ? new Date(dateValue) : dateValue;
+    if (isNaN(date.getTime())) {
+      return 'Tanggal tidak valid';
+    }
+    return date.toLocaleDateString('id-ID', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
 }
 
 type PersonalDashboardProps = {
@@ -40,163 +53,146 @@ export default function PersonalDashboard({
   member,
   transactions,
 }: PersonalDashboardProps) {
-  const [startDate] = useLocalStorage<string | null>('kas-start-date', null);
-  const [totalDues, setTotalDues] = useState<number | null>(null);
-  const [isLoadingDues, setLoadingDues] = useState(true);
+  const [settings, setSettings] = useState<Settings | null>(null);
+  const [totalDues, setTotalDues] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const fetchDues = async () => {
-      setLoadingDues(true);
-      try {
-        const result = await getPeriodicDues(startDate);
+    async function fetchSettingsAndDues() {
+      setIsLoading(true);
+      const fetchedSettings = await getSettings();
+      setSettings(fetchedSettings);
+      
+      if (fetchedSettings.startDate && fetchedSettings.duesAmount && fetchedSettings.duesFrequency) {
+        const result = await getPeriodicDues(fetchedSettings.startDate, fetchedSettings.duesAmount, fetchedSettings.duesFrequency);
         setTotalDues(result.totalDues);
-      } catch (error) {
-        console.error("Failed to fetch periodic dues:", error);
-        setTotalDues(0); // Fallback to 0 if AI call fails
       }
-      setLoadingDues(false);
+      setIsLoading(false);
+    }
+    fetchSettingsAndDues();
+  }, []);
+
+  const { paidAmount, paymentHistory } = useMemo(() => {
+    const personalPayments = transactions
+      .filter((t) => t.type === 'Pemasukan' && t.memberId === member.id)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    const paidAmount = personalPayments.reduce((sum, t) => sum + t.amount, 0);
+
+    return {
+      paidAmount,
+      paymentHistory: personalPayments,
     };
-
-    fetchDues();
-  }, [startDate]);
-
-  const memberTransactions = useMemo(() => {
-    return transactions.filter(
-      (t) => t.type === 'Pemasukan' && t.memberId === member.id
-    );
   }, [transactions, member.id]);
 
-  const totalDeposits = useMemo(() => {
-    return memberTransactions.reduce((sum, t) => sum + t.amount, 0);
-  }, [memberTransactions]);
+  const arrears = useMemo(() => Math.max(0, totalDues - paidAmount), [totalDues, paidAmount]);
+  const progress = useMemo(() => (totalDues > 0 ? (paidAmount / totalDues) * 100 : 100), [paidAmount, totalDues]);
 
-  const finalBalance = useMemo(() => {
-    if (totalDues === null) return null;
-    return totalDeposits - totalDues;
-  }, [totalDeposits, totalDues]);
-
-  const balanceStatus = useMemo(() => {
-    if (finalBalance === null) {
-      return {
-        text: 'Menghitung...',
-        color: 'bg-gray-500',
-        icon: <Skeleton className="h-6 w-6 rounded-full" />,
-      };
-    }
-    if (finalBalance >= 0) {
-      return {
-        text: 'Lunas',
-        color: 'bg-green-500',
-        icon: <CheckCircle2 className="h-6 w-6 text-white" />,
-      };
-    }
-    return {
-      text: 'Belum Lunas',
-      color: 'bg-red-500',
-      icon: <AlertCircle className="h-6 w-6 text-white" />,
-    };
-  }, [finalBalance]);
-
+  const duesStatus = useMemo(() => {
+    if (arrears === 0 && totalDues > 0) return { text: 'Lunas', color: 'bg-green-500' };
+    if (arrears > 0) return { text: 'Belum Lunas', color: 'bg-yellow-500' };
+    return { text: 'Belum Ada Tagihan', color: 'bg-gray-500' };
+  }, [arrears, totalDues]);
 
   return (
-    <div>
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold font-headline">
-          Dashboard Keuangan, {member.name}
-        </h1>
-        <p className="text-muted-foreground">
-          Berikut adalah rincian keuangan iuran kas kelas Anda.
-        </p>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Setoran</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {formatCurrency(totalDeposits)}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Iuran</CardTitle>
-            <TrendingDown className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            {isLoadingDues ? (
-                <Skeleton className="h-8 w-3/4" />
+    <Card className="w-full">
+      <CardHeader>
+        <div className='flex justify-between items-start'>
+          <div>
+            <CardTitle className="text-3xl font-bold font-headline">Halo, {member.name}!</CardTitle>
+            <CardDescription>
+              Ini adalah ringkasan status iuran kas kelas Anda.
+            </CardDescription>
+          </div>
+          <Badge className={`${duesStatus.color} text-white`}>{duesStatus.text}</Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {isLoading ? (
+          <div className="space-y-4">
+              <Skeleton className="h-12 w-full" />
+              <Skeleton className="h-24 w-full" />
+          </div>
+        ) : (
+          <>
+            {!settings?.startDate || !settings?.duesAmount ? (
+              <Alert>
+                <Info className="h-4 w-4" />
+                <AlertTitle>Pengaturan Belum Lengkap</AlertTitle>
+                <AlertDescription>
+                  Admin belum mengatur tanggal mulai kas atau jumlah iuran. Tagihan belum dapat dihitung.
+                </AlertDescription>
+              </Alert>
             ) : (
-                <div className="text-2xl font-bold">
-                    {formatCurrency(totalDues ?? 0)}
+              <div className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-3">
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardDescription>Total Tagihan</CardDescription>
+                      <CardTitle className="text-2xl">{formatCurrency(totalDues)}</CardTitle>
+                    </CardHeader>
+                  </Card>
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardDescription>Total Dibayar</CardDescription>
+                      <CardTitle className="text-2xl text-green-600">{formatCurrency(paidAmount)}</CardTitle>
+                    </CardHeader>
+                  </Card>
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardDescription>Tunggakan</CardDescription>
+                      <CardTitle className="text-2xl text-destructive">{formatCurrency(arrears)}</CardTitle>
+                    </CardHeader>
+                  </Card>
                 </div>
-            )}
-          </CardContent>
-        </Card>
-        <Card className="lg:col-span-2">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Saldo Akhir</CardTitle>
-            <Wallet className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-          {finalBalance === null ? (
-             <Skeleton className="h-8 w-1/2" />
-          ) : (
-            <>
-              <div className="text-2xl font-bold">{formatCurrency(finalBalance)}</div>
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <span className={`flex h-2 w-2 rounded-full ${balanceStatus.color}`} />
-                  {balanceStatus.text}
+                <div>
+                  <div className="mb-2 flex justify-between">
+                      <span className="text-sm text-muted-foreground">Progres Pembayaran</span>
+                      <span className="text-sm font-semibold">{formatCurrency(paidAmount)} / {formatCurrency(totalDues)}</span>
+                  </div>
+                  <Progress value={progress} />
+                </div>
               </div>
-            </>
-          )}
-          </CardContent>
-        </Card>
-      </div>
+            )}
+          </>
+        )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Riwayat Setoran</CardTitle>
-          <CardDescription>
-            Berikut adalah daftar semua setoran iuran kas yang telah Anda lakukan.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Tanggal</TableHead>
-                <TableHead>Deskripsi</TableHead>
-                <TableHead>Penerima</TableHead>
-                <TableHead className="text-right">Jumlah</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {memberTransactions.length > 0 ? (
-                memberTransactions.map((t) => (
-                  <TableRow key={t.id}>
-                    <TableCell>{new Date(t.date).toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' })}</TableCell>
-                    <TableCell>{t.description}</TableCell>
-                    <TableCell>{t.treasurer}</TableCell>
-                    <TableCell className="text-right font-medium text-green-600">
-                      {formatCurrency(t.amount)}
+        <div>
+          <h3 className="text-lg font-semibold mb-2">Riwayat Pembayaran</h3>
+          <div className="rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Tanggal</TableHead>
+                  <TableHead>Deskripsi</TableHead>
+                  <TableHead>Penerima</TableHead>
+                  <TableHead className="text-right">Jumlah</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {paymentHistory.length > 0 ? (
+                  paymentHistory.map((t) => (
+                    <TableRow key={t.id}>
+                      <TableCell>{formatDate(t.date)}</TableCell>
+                      <TableCell>{t.description}</TableCell>
+                       <TableCell>{t.treasurer || '-'}</TableCell>
+                      <TableCell className="text-right font-medium text-green-600">
+                        {formatCurrency(t.amount)}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center">
+                      Belum ada riwayat pembayaran.
                     </TableCell>
                   </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={4} className="text-center">
-                    Belum ada riwayat setoran.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-    </div>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

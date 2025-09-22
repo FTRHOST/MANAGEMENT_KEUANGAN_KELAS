@@ -25,14 +25,7 @@ async function getData(memberId: string) {
     } as unknown as Transaction;
   });
 
-  const membersCol = collection(db, 'members');
-  const membersSnapshot = await getDocs(membersCol);
-  const allMembers = membersSnapshot.docs.map(doc => ({
-    id: doc.id,
-    ...doc.data(),
-  })) as Member[];
-
-  return { member, transactions, allMembers };
+  return { member, transactions };
 }
 
 export default async function AnggotaPage({ params }: { params: { id: string } }) {
@@ -42,7 +35,7 @@ export default async function AnggotaPage({ params }: { params: { id: string } }
     notFound();
   }
 
-  const { member, transactions, allMembers } = data;
+  const { member, transactions } = data;
 
   return (
     <div className="space-y-8">
@@ -56,9 +49,14 @@ export default async function AnggotaPage({ params }: { params: { id: string } }
 }
 
 export async function generateStaticParams() {
-  const membersCol = collection(db, 'members');
-  const membersSnapshot = await getDocs(membersCol);
-  return membersSnapshot.docs.map(doc => ({
-    id: doc.id,
-  }));
+  try {
+    const membersCol = collection(db, 'members');
+    const membersSnapshot = await getDocs(membersCol);
+    return membersSnapshot.docs.map(doc => ({
+      id: doc.id,
+    }));
+  } catch (error) {
+    console.error("Failed to generate static params:", error);
+    return [];
+  }
 }

@@ -1,7 +1,11 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import SettingsForm from "../components/SettingsForm";
+import { getSettings } from "@/lib/actions";
+import type { Settings } from "@/lib/types";
 
-export default function SettingsPage() {
+export default async function SettingsPage() {
+  const settings: Settings = await getSettings();
+
   return (
     <div className="space-y-6 max-w-2xl mx-auto">
       <div>
@@ -12,14 +16,13 @@ export default function SettingsPage() {
       </div>
       <Card>
         <CardHeader>
-          <CardTitle>Tanggal Mulai Kas</CardTitle>
+          <CardTitle>Pengaturan Iuran Kas</CardTitle>
           <CardDescription>
-            Tanggal ini digunakan sebagai titik awal untuk menghitung total
-            iuran mingguan yang harus dibayar setiap anggota.
+            Atur tanggal mulai, jumlah, dan frekuensi iuran kas kelas.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <SettingsForm />
+          <SettingsForm currentSettings={settings} />
         </CardContent>
       </Card>
     </div>
