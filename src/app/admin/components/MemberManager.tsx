@@ -147,7 +147,9 @@ export default function MemberManager({ initialMembers, transactions }: MemberMa
     <Card>
       <CardHeader>
         <CardTitle>Manajemen Anggota</CardTitle>
-        <CardDescription>Tambah, edit, atau hapus anggota kelas beserta saldo personalnya.</CardDescription>
+        <CardDescription>
+          Tambah, edit, atau hapus anggota. Saldo personal menunjukkan sisa uang atau tunggakan (jika negatif) dari setiap anggota.
+        </CardDescription>
       </CardHeader>
       <CardContent>
         <div className="text-right mb-4">
