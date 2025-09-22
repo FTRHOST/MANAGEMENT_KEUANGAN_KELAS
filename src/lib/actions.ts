@@ -53,8 +53,11 @@ export async function updateSettings(settings: Settings) {
     ...settings,
     duesAmount: Number(settings.duesAmount) || 0,
   };
-  // The startDate and duesFrequency are no longer used, but we don't remove them from the DB
-  // in case of future use. We just don't save them from the form anymore.
+  if (settings.startDate) {
+    dataToSave.startDate = new Date(settings.startDate);
+  } else {
+    dataToSave.startDate = null;
+  }
   
   await setDoc(settingsDoc, dataToSave, { merge: true });
   revalidatePath('/admin/settings');
@@ -156,7 +159,6 @@ export async function updateTransaction(id: string, transaction: Omit<Transactio
             dataToUpdate.memberId = null;
             dataToUpdate.memberName = null;
         }
-        dataToUpdate.treasurer = null; // Expenses don't have a treasurer
     } else {
       dataToUpdate.memberId = null;
       dataToUpdate.memberName = null;

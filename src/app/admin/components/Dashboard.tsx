@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useMemo } from 'react';
@@ -13,7 +14,7 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import type { Member, Transaction } from '@/lib/types';
-import { ArrowDownCircle, ArrowUpCircle, Scale, Users, UserCheck } from 'lucide-react';
+import { ArrowDownCircle, ArrowUpCircle, Scale, Users, UserCheck, Wallet } from 'lucide-react';
 
 function formatCurrency(amount: number) {
   return new Intl.NumberFormat('id-ID', {
@@ -43,14 +44,22 @@ export default function Dashboard({
     const totalMembers = members.length;
     
     const treasurer1Income = transactions
-      .filter((t) => t.treasurer === 'Bendahara 1')
+      .filter((t) => t.type === 'Pemasukan' && t.treasurer === 'Bendahara 1')
       .reduce((sum, t) => sum + t.amount, 0);
+    const treasurer1Expenses = transactions
+      .filter((t) => t.type === 'Pengeluaran' && t.treasurer === 'Bendahara 1')
+      .reduce((sum, t) => sum + t.amount, 0);
+    const treasurer1Balance = treasurer1Income - treasurer1Expenses;
 
     const treasurer2Income = transactions
-      .filter((t) => t.treasurer === 'Bendahara 2')
+      .filter((t) => t.type === 'Pemasukan' && t.treasurer === 'Bendahara 2')
       .reduce((sum, t) => sum + t.amount, 0);
+    const treasurer2Expenses = transactions
+        .filter((t) => t.type === 'Pengeluaran' && t.treasurer === 'Bendahara 2')
+        .reduce((sum, t) => sum + t.amount, 0);
+    const treasurer2Balance = treasurer2Income - treasurer2Expenses;
 
-    return { totalIncome, totalExpenses, finalBalance, totalMembers, treasurer1Income, treasurer2Income };
+    return { totalIncome, totalExpenses, finalBalance, totalMembers, treasurer1Balance, treasurer2Balance };
   }, [transactions, members]);
 
   const chartData = [
@@ -103,23 +112,23 @@ export default function Dashboard({
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Diterima Bendahara 1</CardTitle>
-            <UserCheck className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Sisa Saldo Bendahara 1</CardTitle>
+            <Wallet className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {formatCurrency(stats.treasurer1Income)}
+              {formatCurrency(stats.treasurer1Balance)}
             </div>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Diterima Bendahara 2</CardTitle>
-            <UserCheck className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Sisa Saldo Bendahara 2</CardTitle>
+            <Wallet className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {formatCurrency(stats.treasurer2Income)}
+              {formatCurrency(stats.treasurer2Balance)}
             </div>
           </CardContent>
         </Card>

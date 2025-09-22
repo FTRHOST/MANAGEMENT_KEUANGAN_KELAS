@@ -176,7 +176,7 @@ export default function TransactionManager({ initialTransactions, members }: Tra
                 <TableHead>Tanggal</TableHead>
                 <TableHead>Tipe</TableHead>
                 <TableHead>Nama/Deskripsi</TableHead>
-                <TableHead>Penerima</TableHead>
+                <TableHead>Bendahara</TableHead>
                 <TableHead className="text-right">Jumlah</TableHead>
                 <TableHead className="text-right">Aksi</TableHead>
               </TableRow>
@@ -352,6 +352,26 @@ export default function TransactionManager({ initialTransactions, members }: Tra
                           </Select>
                            <p className="text-xs text-muted-foreground">
                               Jika tidak dipilih, akan menjadi pengeluaran bersama.
+                           </p>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="treasurer"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Dibayar oleh Bendahara (Opsional)</FormLabel>
+                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <FormControl><SelectTrigger><SelectValue placeholder="Pilih bendahara" /></SelectTrigger></FormControl>
+                            <SelectContent>
+                                <SelectItem value="Bendahara 1">Bendahara 1</SelectItem>
+                                <SelectItem value="Bendahara 2">Bendahara 2</SelectItem>
+                            </SelectContent>
+                          </Select>
+                           <p className="text-xs text-muted-foreground">
+                              Pilih bendahara yang melakukan pembayaran.
                            </p>
                           <FormMessage />
                         </FormItem>
