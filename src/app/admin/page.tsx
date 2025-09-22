@@ -1,6 +1,6 @@
 import { collection, getDocs, orderBy, query } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import type { Member, Transaction } from '@/lib/types';
+import type { Member, Transaction, CashierDay } from '@/lib/types';
 import AdminTabs from './components/AdminTabs';
 
 async function getAdminData() {
@@ -18,12 +18,23 @@ async function getAdminData() {
       date: data.date.toDate().toISOString(),
     } as unknown as Transaction;
   });
+
+  const cashierDaysCol = collection(db, 'cashier_days');
+  const cashierDaysSnapshot = await getDocs(query(cashierDaysCol, orderBy('date', 'desc')));
+  const cashierDays = cashierDaysSnapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+          id: doc.id,
+          ...data,
+          date: data.date.toDate().toISOString(),
+      } as CashierDay;
+  });
   
-  return { members, transactions };
+  return { members, transactions, cashierDays };
 }
 
 export default async function AdminPage() {
-    const { members, transactions } = await getAdminData();
+    const { members, transactions, cashierDays } = await getAdminData();
   
     return (
         <div className="space-y-6">
@@ -31,7 +42,7 @@ export default async function AdminPage() {
                 <h1 className="text-3xl font-bold font-headline">Panel Admin</h1>
                 <p className="text-muted-foreground">Kelola keuangan dan anggota kelas di sini.</p>
             </div>
-            <AdminTabs members={members} transactions={transactions} />
+            <AdminTabs members={members} transactions={transactions} cashierDays={cashierDays} />
         </div>
     );
 }

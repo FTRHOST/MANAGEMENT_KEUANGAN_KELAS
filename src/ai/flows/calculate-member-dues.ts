@@ -1,4 +1,7 @@
-// src/ai/flows/calculate-member-dues.ts
+// This flow is deprecated and no longer used.
+// The calculation logic has been moved to the PersonalDashboard component
+// based on manually entered cashier days.
+
 'use server';
 
 /**

@@ -1,3 +1,6 @@
+// This file is no longer needed with the manual cashier day system.
+// You can safely delete it. It is kept here to avoid breaking imports
+// but its functions are no longer used in the main logic.
 
 import {
   eachWeekOfInterval,
@@ -11,6 +14,7 @@ import {
 import { id } from 'date-fns/locale';
 
 export function getWeeks(startDate: string) {
+  if (!startDate) return [];
   const start = new Date(startDate);
   const now = new Date();
   const weeks = eachWeekOfInterval(
@@ -29,6 +33,7 @@ export function getWeeks(startDate: string) {
 }
 
 export function getMonths(startDate: string) {
+    if (!startDate) return [];
   const start = new Date(startDate);
   const now = new Date();
   const months = eachMonthOfInterval({ start, end: now });

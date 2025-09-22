@@ -15,9 +15,10 @@ import {
   getDoc,
   setDoc,
   writeBatch,
+  orderBy,
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import type { Member, Transaction, TransactionData, Settings } from '@/lib/types';
+import type { Member, Transaction, TransactionData, Settings, CashierDay } from '@/lib/types';
 import { calculateMemberDues } from '@/ai/flows/calculate-member-dues';
 
 // Settings Actions
@@ -32,16 +33,11 @@ export async function getSettings(): Promise<Settings> {
         duesAmount,
     } as Settings;
     
-    if (data.startDate && typeof data.startDate.toDate === 'function') {
-        settings.startDate = data.startDate.toDate().toISOString();
-    }
-    
     return settings;
   }
   // Default settings if the document doesn't exist
   return {
     duesAmount: 2000,
-    duesFrequency: 'weekly',
   };
 }
 
@@ -51,9 +47,6 @@ export async function updateSettings(settings: Settings) {
     ...settings,
     duesAmount: Number(settings.duesAmount) || 0,
   };
-  if (settings.startDate) {
-    dataToSave.startDate = Timestamp.fromDate(new Date(settings.startDate));
-  }
   await setDoc(settingsDoc, dataToSave, { merge: true });
   revalidatePath('/admin/settings');
   revalidatePath('/anggota', 'layout');
@@ -125,57 +118,45 @@ export async function addTransaction(transaction: Omit<Transaction, 'id' | 'date
     
     const batch = writeBatch(db);
 
-    if (currentBalance >= expenseAmount) {
-      // Balance is sufficient, just add the expense transaction
-      dataToSave.memberId = null;
-      dataToSave.memberName = null;
-      dataToSave.treasurer = null;
-      batch.set(doc(collection(db, 'transactions')), dataToSave);
-    } else {
-      // Balance is not sufficient
-      const shortfall = expenseAmount - currentBalance;
+    const expenseFromBalance = Math.min(currentBalance, expenseAmount);
+    const shortfall = expenseAmount - expenseFromBalance;
+
+    if (expenseFromBalance > 0) {
+      const initialExpense = {
+        ...dataToSave,
+        amount: expenseFromBalance,
+        description: `${transaction.description} (dari kas)`,
+        memberId: null,
+        memberName: null,
+        treasurer: null,
+      };
+      batch.set(doc(collection(db, 'transactions')), initialExpense);
+    }
+
+    if (shortfall > 0) {
       const membersSnapshot = await getDocs(collection(db, 'members'));
       const members = membersSnapshot.docs.map(d => ({ id: d.id, ...d.data() } as Member));
       const memberCount = members.length;
 
-      if (memberCount === 0) {
-        // No members to divide the cost, just add the full expense
-        dataToSave.memberId = null;
-        dataToSave.memberName = null;
-        dataToSave.treasurer = null;
-        batch.set(doc(collection(db, 'transactions')), dataToSave);
-      } else {
-         const costPerMember = Math.ceil(shortfall / memberCount);
-
-         // 1. Add expense transaction for the amount covered by the balance (if any)
-         if (currentBalance > 0) {
-            const initialExpense = {
-                ...dataToSave,
-                amount: currentBalance,
-                description: `${transaction.description} (dari kas)`,
-                memberId: null,
-                memberName: null,
-                treasurer: null,
-            };
-            batch.set(doc(collection(db, 'transactions')), initialExpense);
-         }
-
-         // 2. Add expense for each member to cover the shortfall
-         const memberExpenseDescription = `Iuran untuk: ${transaction.description}`;
-         for (const member of members) {
-            const memberExpense = {
-                type: 'Pengeluaran',
-                amount: costPerMember,
-                date: Timestamp.fromDate(transaction.date),
-                description: memberExpenseDescription,
-                memberId: member.id,
-                memberName: member.name,
-                treasurer: null,
-            };
-            batch.set(doc(collection(db, 'transactions')), memberExpense);
-         }
+      if (memberCount > 0) {
+        const costPerMember = Math.ceil(shortfall / memberCount);
+        const memberExpenseDescription = `Iuran untuk: ${transaction.description}`;
+        
+        for (const member of members) {
+          const memberExpense = {
+              type: 'Pengeluaran',
+              amount: costPerMember,
+              date: Timestamp.fromDate(transaction.date),
+              description: memberExpenseDescription,
+              memberId: member.id,
+              memberName: member.name,
+              treasurer: null,
+          };
+          batch.set(doc(collection(db, 'transactions')), memberExpense);
+        }
       }
     }
+    
     await batch.commit();
 
   } else {
@@ -224,33 +205,31 @@ export async function deleteTransaction(id: string) {
   revalidatePath('/anggota', 'layout');
 }
 
-// AI Dues Calculation Action
-export async function getPeriodicDues(startDate: string, duesAmount: number, duesFrequency: 'weekly' | 'monthly') {
-  if (!startDate || !duesAmount || !duesFrequency) {
-    return { totalDues: 0 };
-  }
-  try {
-    const result = await calculateMemberDues({
-      startDate,
-      weeklyRate: duesFrequency === 'weekly' ? duesAmount : duesAmount / 4, // simplistic conversion for AI
-      currentDate: new Date().toISOString().split('T')[0], // YYYY-MM-DD
-    });
-    return result;
-  } catch (error) {
-    console.error("AI flow error:", error);
-    // Fallback simple calculation
-    const start = new Date(startDate);
-    const now = new Date();
-    if(duesFrequency === 'weekly') {
-      const diffTime = Math.abs(now.getTime() - start.getTime());
-      const diffWeeks = Math.floor(diffTime / (1000 * 60 * 60 * 24 * 7));
-      return { totalDues: diffWeeks * duesAmount };
-    } else {
-      let months;
-      months = (now.getFullYear() - start.getFullYear()) * 12;
-      months -= start.getMonth();
-      months += now.getMonth();
-      return { totalDues: months <= 0 ? 0 : months * duesAmount };
+// Cashier Day Actions
+export async function getCashierDays(): Promise<CashierDay[]> {
+    const cashierDaysCol = collection(db, 'cashier_days');
+    const snapshot = await getDocs(query(cashierDaysCol, orderBy('date', 'desc')));
+    return snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        date: doc.data().date.toDate().toISOString(),
+    } as CashierDay));
+}
+
+export async function addCashierDay(date: Date, description: string) {
+    if (!date || !description) {
+        return { error: 'Tanggal dan deskripsi tidak boleh kosong.' };
     }
-  }
+    await addDoc(collection(db, 'cashier_days'), {
+        date: Timestamp.fromDate(date),
+        description
+    });
+    revalidatePath('/admin');
+    revalidatePath('/anggota', 'layout');
+}
+
+export async function deleteCashierDay(id: string) {
+    await deleteDoc(doc(db, 'cashier_days', id));
+    revalidatePath('/admin');
+    revalidatePath('/anggota', 'layout');
 }

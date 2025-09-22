@@ -18,7 +18,7 @@ export default async function SettingsPage() {
         <CardHeader>
           <CardTitle>Pengaturan Iuran Kas</CardTitle>
           <CardDescription>
-            Atur tanggal mulai, jumlah, dan frekuensi iuran kas kelas.
+            Atur jumlah iuran kas per pertemuan.
           </CardDescription>
         </CardHeader>
         <CardContent>

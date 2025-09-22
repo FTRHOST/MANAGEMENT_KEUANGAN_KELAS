@@ -19,7 +19,11 @@ export type TransactionData = Omit<Transaction, 'id' | 'date'> & {
 };
 
 export type Settings = {
-  startDate?: string;
   duesAmount?: number;
-  duesFrequency?: 'weekly' | 'monthly';
+};
+
+export type CashierDay = {
+  id: string;
+  date: string;
+  description: string;
 };
