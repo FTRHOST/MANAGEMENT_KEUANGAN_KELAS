@@ -58,6 +58,7 @@ import { PlusCircle, Edit, Trash2, Loader2, CalendarIcon } from 'lucide-react';
 import { format } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { Timestamp } from 'firebase/firestore';
+import { cn } from '@/lib/utils';
 
 
 function formatCurrency(amount: number) {
