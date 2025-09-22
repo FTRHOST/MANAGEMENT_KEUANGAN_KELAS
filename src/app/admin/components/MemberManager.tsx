@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useMemo } from 'react';
@@ -46,8 +47,9 @@ import { useToast } from '@/hooks/use-toast';
 import { addMember, updateMember, deleteMember } from '@/lib/actions';
 import type { Member, Transaction, CashierDay, Settings } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { PlusCircle, Edit, Trash2, Loader2, Ban } from 'lucide-react';
+import { PlusCircle, Edit, Trash2, Loader2, Ban, FileDown } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { exportToXLSX } from '@/lib/export';
 
 const memberSchema = z.object({
   name: z.string().min(3, 'Nama minimal 3 karakter'),
@@ -147,6 +149,18 @@ export default function MemberManager({ initialMembers, transactions, cashierDay
     return balances;
   }, [members, transactions, cashierDays, settings]);
 
+  const handleExport = () => {
+    const dataToExport = members.map(member => {
+        const balance = memberBalances.get(member.id) ?? 0;
+        return {
+            'Nama Anggota': member.name,
+            'Saldo Personal': formatCurrency(balance),
+            'Status': balance < 0 ? `Tunggakan ${formatCurrency(Math.abs(balance))}` : 'Lunas / Sisa Saldo'
+        };
+    });
+    exportToXLSX(dataToExport, 'Laporan_Anggota_Kelas', 'Anggota');
+  };
+
 
   return (
     <Card>
@@ -157,7 +171,10 @@ export default function MemberManager({ initialMembers, transactions, cashierDay
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="text-right mb-4">
+        <div className="flex justify-between items-center mb-4">
+           <Button variant="outline" onClick={handleExport}>
+            <FileDown className="mr-2 h-4 w-4" /> Ekspor ke XLSX
+          </Button>
           <Button onClick={() => handleDialogOpen(null)}>
             <PlusCircle className="mr-2 h-4 w-4" /> Tambah Anggota
           </Button>

@@ -56,11 +56,12 @@ import { useToast } from '@/hooks/use-toast';
 import { addTransaction, updateTransaction, deleteTransaction } from '@/lib/actions';
 import type { Member, Transaction } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { PlusCircle, Edit, Trash2, Loader2, CalendarIcon, Users } from 'lucide-react';
+import { PlusCircle, Edit, Trash2, Loader2, CalendarIcon, Users, FileDown } from 'lucide-react';
 import { format } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { exportToXLSX } from '@/lib/export';
 
 
 function formatCurrency(amount: number) {
@@ -157,6 +158,18 @@ export default function TransactionManager({ initialTransactions, members }: Tra
     toast({ title: 'Sukses', description: 'Transaksi berhasil dihapus.' });
   };
   
+  const handleExport = () => {
+    const dataToExport = transactions.map(t => ({
+        Tanggal: formatDate(t.date),
+        Tipe: t.type,
+        'Nama/Deskripsi': t.memberName || t.description,
+        Bendahara: t.treasurer || '-',
+        Jumlah: t.amount,
+        'Pengeluaran Bersama': t.memberId ? 'Tidak' : 'Ya'
+    }));
+    exportToXLSX(dataToExport, 'Laporan_Transaksi_Kelas', 'Transaksi');
+  };
+
   return (
      <Card>
       <CardHeader>
@@ -164,7 +177,10 @@ export default function TransactionManager({ initialTransactions, members }: Tra
         <CardDescription>Tambah, edit, atau hapus pemasukan dan pengeluaran kas kelas.</CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="text-right mb-4">
+        <div className="flex justify-between items-center mb-4">
+          <Button variant="outline" onClick={handleExport}>
+            <FileDown className="mr-2 h-4 w-4" /> Ekspor ke XLSX
+          </Button>
           <Button onClick={() => handleDialogOpen(null)}>
             <PlusCircle className="mr-2 h-4 w-4" /> Tambah Transaksi
           </Button>

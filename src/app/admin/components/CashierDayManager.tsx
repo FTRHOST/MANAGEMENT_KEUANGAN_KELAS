@@ -51,8 +51,9 @@ import { useToast } from '@/hooks/use-toast';
 import { addCashierDay, deleteCashierDay } from '@/lib/actions';
 import type { CashierDay } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { PlusCircle, Trash2, Loader2, CalendarIcon } from 'lucide-react';
+import { PlusCircle, Trash2, Loader2, CalendarIcon, FileDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { exportToXLSX } from '@/lib/export';
 
 
 const cashierDaySchema = z.object({
@@ -99,6 +100,14 @@ export default function CashierDayManager({ initialCashierDays }: CashierDayMana
     }
   };
 
+  const handleExport = () => {
+    const dataToExport = cashierDays.map(day => ({
+        Tanggal: format(new Date(day.date), 'PPP', { locale: id }),
+        Deskripsi: day.description
+    }));
+    exportToXLSX(dataToExport, 'Daftar_Hari_Kas', 'Hari Kas');
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -106,7 +115,10 @@ export default function CashierDayManager({ initialCashierDays }: CashierDayMana
         <CardDescription>Tambah atau hapus tanggal pengumpulan iuran kas.</CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="text-right mb-4">
+        <div className="flex justify-between items-center mb-4">
+           <Button variant="outline" onClick={handleExport}>
+            <FileDown className="mr-2 h-4 w-4" /> Ekspor ke XLSX
+          </Button>
           <Button onClick={() => setDialogOpen(true)}>
             <PlusCircle className="mr-2 h-4 w-4" /> Tambah Hari Kas
           </Button>
