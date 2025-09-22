@@ -27,11 +27,16 @@ export async function getSettings(): Promise<Settings> {
     const data = settingsDoc.data();
     // Ensure duesAmount is a number, default to 0 if it's missing or not a number
     const duesAmount = typeof data.duesAmount === 'number' ? data.duesAmount : 0;
-    return {
-      ...data,
-      duesAmount,
-      startDate: data.startDate?.toDate()?.toISOString(),
+    const settings = {
+        ...data,
+        duesAmount,
+    } as Settings;
+    
+    if (data.startDate && typeof data.startDate.toDate === 'function') {
+        settings.startDate = data.startDate.toDate().toISOString();
     }
+    
+    return settings;
   }
   // Default settings if the document doesn't exist
   return {
@@ -101,10 +106,16 @@ export async function addTransaction(transaction: Omit<Transaction, 'id' | 'date
     }
      await addDoc(collection(db, 'transactions'), dataToSave);
   } else if (transaction.type === 'Pengeluaran') {
-    // Fair expense logic
+    
     const transactionsCol = collection(db, 'transactions');
     const transactionsSnapshot = await getDocs(transactionsCol);
-    const allTransactions = transactionsSnapshot.docs.map(d => d.data() as Transaction);
+    const allTransactions = transactionsSnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+            ...data,
+            date: data.date.toDate().toISOString(),
+        } as unknown as Transaction;
+    });
     
     const totalIncome = allTransactions.filter(t => t.type === 'Pemasukan').reduce((sum, t) => sum + t.amount, 0);
     const totalExpenses = allTransactions.filter(t => t.type === 'Pengeluaran').reduce((sum, t) => sum + t.amount, 0);
@@ -112,12 +123,14 @@ export async function addTransaction(transaction: Omit<Transaction, 'id' | 'date
 
     const expenseAmount = transaction.amount;
     
+    const batch = writeBatch(db);
+
     if (currentBalance >= expenseAmount) {
       // Balance is sufficient, just add the expense transaction
       dataToSave.memberId = null;
       dataToSave.memberName = null;
       dataToSave.treasurer = null;
-      await addDoc(collection(db, 'transactions'), dataToSave);
+      batch.set(doc(collection(db, 'transactions')), dataToSave);
     } else {
       // Balance is not sufficient
       const shortfall = expenseAmount - currentBalance;
@@ -125,49 +138,52 @@ export async function addTransaction(transaction: Omit<Transaction, 'id' | 'date
       const members = membersSnapshot.docs.map(d => ({ id: d.id, ...d.data() } as Member));
       const memberCount = members.length;
 
-      if(memberCount === 0) {
-        // No members to divide the cost, just add the expense
+      if (memberCount === 0) {
+        // No members to divide the cost, just add the full expense
         dataToSave.memberId = null;
         dataToSave.memberName = null;
         dataToSave.treasurer = null;
-        await addDoc(collection(db, 'transactions'), dataToSave);
-        return;
-      }
+        batch.set(doc(collection(db, 'transactions')), dataToSave);
+      } else {
+         const costPerMember = Math.ceil(shortfall / memberCount);
 
-      const costPerMember = Math.ceil(shortfall / memberCount);
-      
-      const batch = writeBatch(db);
+         // 1. Add expense transaction for the amount covered by the balance (if any)
+         if (currentBalance > 0) {
+            const initialExpense = {
+                ...dataToSave,
+                amount: currentBalance,
+                description: `${transaction.description} (dari kas)`,
+                memberId: null,
+                memberName: null,
+                treasurer: null,
+            };
+            batch.set(doc(collection(db, 'transactions')), initialExpense);
+         }
 
-      // 1. Add the initial expense transaction (for the amount covered by balance if any)
-      const initialExpense = {
-        ...dataToSave,
-        amount: currentBalance > 0 ? currentBalance : 0,
-        description: `${transaction.description} (dari kas)`,
-        memberId: null,
-        memberName: null,
-        treasurer: null,
-      };
-      if (initialExpense.amount > 0) {
-        batch.set(doc(collection(db, 'transactions')), initialExpense);
+         // 2. Add expense for each member to cover the shortfall
+         const memberExpenseDescription = `Iuran untuk: ${transaction.description}`;
+         for (const member of members) {
+            const memberExpense = {
+                type: 'Pengeluaran',
+                amount: costPerMember,
+                date: Timestamp.fromDate(transaction.date),
+                description: memberExpenseDescription,
+                memberId: member.id,
+                memberName: member.name,
+                treasurer: null,
+            };
+            batch.set(doc(collection(db, 'transactions')), memberExpense);
+         }
       }
-
-      // 2. Add expense for each member
-      const memberExpenseDescription = `Iuran untuk: ${transaction.description}`;
-      for (const member of members) {
-        const memberExpense = {
-          type: 'Pengeluaran',
-          amount: costPerMember,
-          date: Timestamp.fromDate(transaction.date),
-          description: memberExpenseDescription,
-          memberId: member.id,
-          memberName: member.name,
-          treasurer: null,
-        };
-        batch.set(doc(collection(db, 'transactions')), memberExpense);
-      }
-      
-      await batch.commit();
     }
+    await batch.commit();
+
+  } else {
+      // Fallback for other cases or Pemasukan without memberId
+      dataToSave.memberId = null;
+      dataToSave.memberName = null;
+      dataToSave.treasurer = null;
+      await addDoc(collection(db, 'transactions'), dataToSave);
   }
 
   revalidatePath('/admin');
