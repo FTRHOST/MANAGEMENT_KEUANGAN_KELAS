@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect } from 'react';
+import * as React from "react"
 import { useRouter } from 'next/navigation';
 import type { Member } from '@/lib/types';
 import {
@@ -12,29 +12,51 @@ import {
   CommandItem,
   CommandList,
 } from '@/components/ui/command';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { Drawer, DrawerContent } from '@/components/ui/drawer';
-import { User, Search } from 'lucide-react';
-import { useIsMobile } from '@/hooks/use-mobile';
-import { Button } from '@/components/ui/button';
+import { User } from 'lucide-react';
+import { useIsMobile } from "@/hooks/use-mobile";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Drawer, DrawerContent, DrawerTrigger } from "@/components/ui/drawer";
+
 
 type NameSearchProps = {
   members: Member[];
 };
 
-function CommandContent({ members, onSelect }: { members: Member[], onSelect: (id: string) => void }) {
-  return (
-    <Command>
-      <CommandInput placeholder="Cari nama atau NIM..." className="h-14 text-lg" />
+export default function NameSearch({ members }: NameSearchProps) {
+  const router = useRouter();
+  const [open, setOpen] = React.useState(false)
+  const isMobile = useIsMobile();
+  const isDesktop = !isMobile;
+
+  React.useEffect(() => {
+    const down = (e: KeyboardEvent) => {
+      if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault()
+        setOpen((open) => !open)
+      }
+    }
+
+    document.addEventListener("keydown", down)
+    return () => document.removeEventListener("keydown", down)
+  }, [])
+
+  const runCommand = React.useCallback((command: () => unknown) => {
+    setOpen(false)
+    command()
+  }, [])
+
+  const CommandMenu = (
+    <Command className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-group]]:px-2 [&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input]]:h-12 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-3 [&_[cmdk-item]_svg]:h-5 [&_[cmdk-item]_svg]:w-5">
+      <CommandInput placeholder="Cari nama atau NIM..." />
       <CommandList>
-        <CommandEmpty>Anggota tidak ditemukan.</CommandEmpty>
-        <CommandGroup heading="Anggota Kelas">
-          {members.map(member => (
+        <CommandEmpty>Nama tidak ditemukan.</CommandEmpty>
+        <CommandGroup>
+          {members.map((member) => (
             <CommandItem
               key={member.id}
-              value={member.name}
-              onSelect={() => onSelect(member.id)}
-              className="py-3"
+              value={`${member.name} ${member.id}`}
+              onSelect={() => runCommand(() => router.push(`/anggota/${member.id}`))}
             >
               <User className="mr-2 h-4 w-4" />
               <span>{member.name}</span>
@@ -43,62 +65,39 @@ function CommandContent({ members, onSelect }: { members: Member[], onSelect: (i
         </CommandGroup>
       </CommandList>
     </Command>
-  );
-}
+  )
 
-export default function NameSearch({ members }: NameSearchProps) {
-  const router = useRouter();
-  const [open, setOpen] = useState(false);
-  const isMobile = useIsMobile();
-
-  useEffect(() => {
-    const down = (e: KeyboardEvent) => {
-      if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
-        e.preventDefault();
-        setOpen(o => !o);
-      }
-    };
-    document.addEventListener('keydown', down);
-    return () => document.removeEventListener('keydown', down);
-  }, []);
-
-  const runCommand = (id: string) => {
-    setOpen(false);
-    router.push(`/anggota/${id}`);
-  };
-
-  if (isMobile) {
+  if (isDesktop) {
     return (
       <>
-        <Button onClick={() => setOpen(true)} variant="outline" className="w-full text-lg h-14 justify-start px-4 text-muted-foreground">
-          <Search className="mr-2 h-5 w-5" />
+        <Button onClick={() => setOpen(true)} variant="outline" className="w-full justify-start h-14 text-lg text-muted-foreground">
           Cari nama atau NIM...
         </Button>
-        <Drawer open={open} onOpenChange={setOpen}>
-          <DrawerContent>
-            <div className="mt-4 border-t">
-              <CommandContent members={members} onSelect={runCommand} />
-            </div>
-          </DrawerContent>
-        </Drawer>
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogContent className="p-0 gap-0">
+             <DialogHeader className="sr-only">
+              <DialogTitle>Cari Anggota</DialogTitle>
+              <DialogDescription>Cari nama atau NIM untuk melihat detail keuangan.</DialogDescription>
+            </DialogHeader>
+            {CommandMenu}
+          </DialogContent>
+        </Dialog>
       </>
-    );
+    )
   }
 
   return (
-    <>
-      <Button onClick={() => setOpen(true)} variant="outline" className="w-full max-w-md text-lg h-14 justify-start px-4 text-muted-foreground">
-          <Search className="mr-2 h-5 w-5" />
+    <Drawer open={open} onOpenChange={setOpen}>
+      <DrawerTrigger asChild>
+        <Button variant="outline" className="w-full justify-start h-14 text-lg text-muted-foreground">
           Cari nama atau NIM...
-          <kbd className="pointer-events-none absolute right-4 hidden h-7 select-none items-center gap-1 rounded border bg-muted px-2 font-mono text-sm font-medium opacity-100 sm:flex">
-              <span className="text-base">⌘</span>K
-          </kbd>
-      </Button>
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="overflow-hidden p-0 shadow-lg">
-          <CommandContent members={members} onSelect={runCommand} />
-        </DialogContent>
-      </Dialog>
-    </>
-  );
+        </Button>
+      </DrawerTrigger>
+      <DrawerContent>
+        <div className="mt-4 border-t">
+          {CommandMenu}
+        </div>
+      </DrawerContent>
+    </Drawer>
+  )
 }
