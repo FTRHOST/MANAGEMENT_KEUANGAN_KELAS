@@ -1,82 +1,73 @@
-"use client"
 
-import * as React from "react"
-import { useRouter } from "next/navigation"
+"use client";
 
-import type { Member } from "@/lib/types"
-import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
+import { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
+import type { Member } from '@/lib/types';
+
 import {
   Command,
+  CommandDialog,
   CommandEmpty,
   CommandGroup,
   CommandInput,
   CommandItem,
   CommandList,
-} from "@/components/ui/command"
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover"
-import { Check, ChevronsUpDown } from "lucide-react"
+  CommandSeparator,
+} from "@/components/ui/command";
+
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 
 type NameSearchProps = {
   members: Member[];
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
 };
 
-export default function NameSearch({ members }: NameSearchProps) {
-  const [open, setOpen] = React.useState(false)
-  const [value, setValue] = React.useState("")
-  const router = useRouter()
+export default function NameSearch({ members, isOpen, onOpenChange }: NameSearchProps) {
+  const router = useRouter();
+
+  useEffect(() => {
+    const down = (e: KeyboardEvent) => {
+      if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        onOpenChange(!isOpen);
+      }
+    };
+
+    document.addEventListener("keydown", down);
+    return () => document.removeEventListener("keydown", down);
+  }, [isOpen, onOpenChange]);
+
+  const runCommand = useCallback((command: () => unknown) => {
+    onOpenChange(false);
+    command();
+  }, [onOpenChange]);
+
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          role="combobox"
-          aria-expanded={open}
-          className="w-full max-w-md justify-between h-12 rounded-full text-base"
-        >
-          {value
-            ? members.find((member) => member.name.toLowerCase() === value)?.name
-            : "Cari nama anggota..."}
-          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
-        <Command>
-          <CommandInput placeholder="Ketik untuk mencari nama..." />
-          <CommandList>
-            <CommandEmpty>Anggota tidak ditemukan.</CommandEmpty>
-            <CommandGroup>
-              {members.map((member) => (
-                <CommandItem
-                  key={member.id}
-                  value={member.name}
-                  onSelect={(currentValue) => {
-                    setValue(currentValue === value ? "" : currentValue)
-                    setOpen(false)
-                    const selectedMember = members.find(m => m.name.toLowerCase() === currentValue.toLowerCase());
-                    if (selectedMember) {
-                      router.push(`/anggota/${selectedMember.id}`)
-                    }
-                  }}
-                >
-                  <Check
-                    className={cn(
-                      "mr-2 h-4 w-4",
-                      value === member.name.toLowerCase() ? "opacity-100" : "opacity-0"
-                    )}
-                  />
-                  {member.name}
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
-  )
+     <Dialog open={isOpen} onOpenChange={onOpenChange}>
+        <DialogContent className="p-0 gap-0">
+          <Command>
+            <CommandInput placeholder="Cari nama atau NIM..." />
+            <CommandList>
+              <CommandEmpty>Tidak ada hasil yang ditemukan.</CommandEmpty>
+              <CommandGroup heading="Anggota Kelas">
+                {members.map((member) => (
+                  <CommandItem
+                    key={member.id}
+                    value={member.name}
+                    onSelect={() => {
+                        runCommand(() => router.push(`/anggota/${member.id}`))
+                    }}
+                  >
+                    {member.name}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </DialogContent>
+    </Dialog>
+  );
 }
