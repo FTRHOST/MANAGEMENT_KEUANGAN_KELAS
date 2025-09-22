@@ -1,9 +1,9 @@
 import { collection, getDocs, doc, getDoc, orderBy, query } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { Member, Transaction } from '@/lib/types';
-import PersonalDashboard from '@/components/public/PersonalDashboard';
+import { PersonalDashboard } from '@/components/public/PersonalDashboard';
 import { notFound } from 'next/navigation';
-import ClassFinanceSummary from '@/components/public/ClassFinanceSummary';
+import { ClassFinanceSummary } from '@/components/public/ClassFinanceSummary';
 
 async function getData(memberId: string) {
   const memberRef = doc(db, 'members', memberId);
