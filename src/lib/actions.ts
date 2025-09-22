@@ -51,19 +51,27 @@ export async function deleteMember(id: string) {
 
 // Transaction Actions
 export async function addTransaction(transaction: Omit<Transaction, 'id' | 'date'> & { date: Date }) {
-  let memberName = '';
+  const dataToSave: any = {
+    ...transaction,
+    date: Timestamp.fromDate(transaction.date),
+  };
+
   if (transaction.type === 'Pemasukan' && transaction.memberId) {
     const memberDoc = await getDoc(doc(db, 'members', transaction.memberId));
     if(memberDoc.exists()) {
-        memberName = memberDoc.data().name;
+        dataToSave.memberName = memberDoc.data().name;
     }
+  } else {
+    // Ensure these fields don't get saved for expenses
+    delete dataToSave.memberId;
+    delete dataToSave.memberName;
+    delete dataToSave.treasurer;
   }
 
-  const dataToSave = {
-    ...transaction,
-    memberName: transaction.type === 'Pemasukan' ? memberName : undefined,
-    date: Timestamp.fromDate(transaction.date),
-  };
+  if (transaction.type === 'Pengeluaran') {
+    delete dataToSave.memberId;
+    delete dataToSave.treasurer;
+  }
 
   await addDoc(collection(db, 'transactions'), dataToSave);
   revalidatePath('/admin');
@@ -71,22 +79,31 @@ export async function addTransaction(transaction: Omit<Transaction, 'id' | 'date
 }
 
 export async function updateTransaction(id: string, transaction: Omit<Transaction, 'id' | 'date'> & { date: Date }) {
-    let memberName = '';
+    const dataToUpdate: any = {
+      ...transaction,
+      date: Timestamp.fromDate(transaction.date),
+    };
+
     if (transaction.type === 'Pemasukan' && transaction.memberId) {
         const memberDoc = await getDoc(doc(db, 'members', transaction.memberId));
         if(memberDoc.exists()) {
-            memberName = memberDoc.data().name;
+            dataToUpdate.memberName = memberDoc.data().name;
         }
+    } else {
+      dataToUpdate.memberId = null;
+      dataToUpdate.memberName = null;
+      dataToUpdate.treasurer = null;
     }
 
-  const dataToUpdate = {
-    ...transaction,
-    memberName: transaction.type === 'Pemasukan' ? memberName : undefined,
-    date: Timestamp.fromDate(transaction.date),
-  };
-  await updateDoc(doc(db, 'transactions', id), dataToUpdate);
-  revalidatePath('/admin');
-  revalidatePath('/anggota', 'layout');
+    if (transaction.type === 'Pengeluaran') {
+        dataToUpdate.memberId = null;
+        dataToUpdate.memberName = null;
+        dataToUpdate.treasurer = null;
+    }
+
+    await updateDoc(doc(db, 'transactions', id), dataToUpdate);
+    revalidatePath('/admin');
+    revalidatePath('/anggota', 'layout');
 }
 
 export async function deleteTransaction(id: string) {
