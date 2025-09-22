@@ -116,61 +116,43 @@ export async function addTransaction(transaction: Omit<Transaction, 'id' | 'date
         }
         await addDoc(collection(db, 'transactions'), dataToSave);
     } else {
-        // Shared expense
-        const expenseAmount = transaction.amount;
-        const expenseDescription = transaction.description;
+        // Shared expense: Distribute cost evenly among all members
         const batch = writeBatch(db);
+        const membersSnapshot = await getDocs(collection(db, 'members'));
+        const members = membersSnapshot.docs.map(d => ({ id: d.id, ...d.data() } as Member));
+        const memberCount = members.length;
 
-        // Get current balance
-        const transactionsSnapshot = await getDocs(collection(db, 'transactions'));
-        const allTransactions = transactionsSnapshot.docs.map(doc => doc.data() as Transaction);
-        const totalIncome = allTransactions.filter(t => t.type === 'Pemasukan').reduce((sum, t) => sum + t.amount, 0);
-        const totalExpenses = allTransactions.filter(t => t.type === 'Pengeluaran').reduce((sum, t) => sum + t.amount, 0);
-        const currentBalance = totalIncome - totalExpenses;
+        if (memberCount > 0) {
+            // Use Math.ceil to ensure the full cost is covered, with the last person paying any remainder
+            const totalCost = transaction.amount;
+            const costPerMember = Math.floor(totalCost / memberCount);
+            const remainder = totalCost % memberCount;
+            
+            for (let i = 0; i < members.length; i++) {
+               const member = members[i];
+               let memberCost = costPerMember;
+               // Add remainder to the last member to ensure total cost matches
+               if (i === members.length - 1) {
+                   memberCost += remainder;
+               }
 
-        // Use amount from balance first
-        const fromBalance = Math.min(currentBalance, expenseAmount);
-        if (fromBalance > 0) {
-            const expenseFromBalance = {
-                ...dataToSave,
-                amount: fromBalance,
-                description: `${expenseDescription} (dari kas)`,
-            };
-            delete expenseFromBalance.memberId;
-            delete expenseFromBalance.memberName;
-            delete expenseFromBalance.treasurer;
-            batch.set(doc(collection(db, 'transactions')), expenseFromBalance);
-        }
-
-        // Distribute shortfall to all members
-        const shortfall = expenseAmount - fromBalance;
-        if (shortfall > 0) {
-            const membersSnapshot = await getDocs(collection(db, 'members'));
-            const members = membersSnapshot.docs.map(d => ({ id: d.id, ...d.data() } as Member));
-            const memberCount = members.length;
-
-            if (memberCount > 0) {
-                // Use Math.ceil to ensure the full shortfall is covered
-                const costPerMember = Math.ceil(shortfall / memberCount);
-                
-                // Add a single expense entry for the shortfall charged to members
-                const memberChargeDescription = `Iuran untuk: ${expenseDescription}`;
-
-                for (const member of members) {
-                   const memberExpense = {
-                       type: 'Pengeluaran',
-                       amount: costPerMember,
-                       date: Timestamp.fromDate(transaction.date),
-                       description: memberChargeDescription,
-                       memberId: member.id,
-                       memberName: member.name,
-                   };
-                   batch.set(doc(collection(db, 'transactions')), memberExpense);
-                }
+               const memberExpense = {
+                   type: 'Pengeluaran',
+                   amount: memberCost,
+                   date: Timestamp.fromDate(transaction.date),
+                   description: transaction.description,
+                   memberId: member.id,
+                   memberName: member.name,
+               };
+               batch.set(doc(collection(db, 'transactions')), memberExpense);
             }
+            await batch.commit();
+        } else {
+           // If there are no members, just add it as a general expense (though this case is unlikely)
+            delete dataToSave.memberId;
+            delete dataToSave.memberName;
+            await addDoc(collection(db, 'transactions'), dataToSave);
         }
-        
-        await batch.commit();
     }
 
   } else {
