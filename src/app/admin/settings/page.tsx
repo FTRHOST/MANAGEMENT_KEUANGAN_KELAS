@@ -1,3 +1,4 @@
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import SettingsForm from "../components/SettingsForm";
 import { getSettings } from "@/lib/actions";
@@ -11,14 +12,14 @@ export default async function SettingsPage() {
       <div>
         <h1 className="text-3xl font-bold font-headline">Pengaturan</h1>
         <p className="text-muted-foreground">
-          Atur parameter dasar untuk perhitungan kas kelas.
+          Atur parameter dasar dan tampilan untuk aplikasi kas kelas.
         </p>
       </div>
       <Card>
         <CardHeader>
-          <CardTitle>Pengaturan Iuran Kas</CardTitle>
+          <CardTitle>Pengaturan Umum</CardTitle>
           <CardDescription>
-            Atur jumlah iuran kas per pertemuan.
+            Ubah nama aplikasi, logo, dan parameter iuran kas.
           </CardDescription>
         </CardHeader>
         <CardContent>

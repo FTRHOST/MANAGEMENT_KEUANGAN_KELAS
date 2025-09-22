@@ -1,14 +1,24 @@
-import type { Metadata } from 'next';
+
+import type { Metadata, ResolvingMetadata } from 'next';
 import { cookies } from 'next/headers';
 import { Toaster } from '@/components/ui/toaster';
 import './globals.css';
 import { Header } from '@/components/Header';
 import { Analytics } from '@vercel/analytics/react';
+import { getSettings } from '@/lib/actions';
 
-export const metadata: Metadata = {
-  title: 'Class Cashier',
-  description: 'Aplikasi Bendahara Cerdas untuk mengelola keuangan kas kelas.',
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const settings = await getSettings();
+  const appName = settings.appName || 'Class Cashier';
+ 
+  return {
+    title: {
+      default: appName,
+      template: `%s | ${appName}`,
+    },
+    description: `Aplikasi Bendahara Cerdas untuk mengelola keuangan kas kelas - ${appName}.`,
+  }
+}
 
 export default async function RootLayout({
   children,
@@ -17,6 +27,7 @@ export default async function RootLayout({
 }>) {
   const cookieStore = cookies();
   const isAuthenticated = !!cookieStore.get('__session');
+  const settings = await getSettings();
 
   return (
     <html lang="id">
@@ -26,7 +37,11 @@ export default async function RootLayout({
         <link href="https://fonts.googleapis.com/css2?family=PT+Sans:ital,wght@0,400;0,700;1,400;1,700&display=swap" rel="stylesheet" />
       </head>
       <body className="font-body antialiased min-h-screen flex flex-col">
-        <Header isAuthenticated={isAuthenticated} />
+        <Header 
+          isAuthenticated={isAuthenticated} 
+          appName={settings.appName || 'Class Cashier'}
+          logoUrl={settings.logoUrl || null}
+        />
         <main className="flex-grow container mx-auto px-4 py-8">
           {children}
         </main>

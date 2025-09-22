@@ -20,6 +20,8 @@ export type TransactionData = Omit<Transaction, 'id' | 'date'> & {
 };
 
 export type Settings = {
+  appName?: string;
+  logoUrl?: string;
   duesAmount?: number;
   startDate?: string | null; // Can be string (ISO date) or null
   duesFrequency?: 'weekly' | 'monthly';
@@ -30,4 +32,3 @@ export type CashierDay = {
   date: string;
   description: string;
 };
-

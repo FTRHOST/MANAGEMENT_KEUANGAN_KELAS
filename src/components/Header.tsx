@@ -1,3 +1,4 @@
+
 "use client";
 
 import Link from 'next/link';
@@ -13,8 +14,15 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 
-export function Header({ isAuthenticated }: { isAuthenticated: boolean }) {
+type HeaderProps = {
+  isAuthenticated: boolean;
+  appName: string;
+  logoUrl: string | null;
+};
+
+export function Header({ isAuthenticated, appName, logoUrl }: HeaderProps) {
   const [isLoginOpen, setLoginOpen] = useState(false);
   const router = useRouter();
 
@@ -29,9 +37,13 @@ export function Header({ isAuthenticated }: { isAuthenticated: boolean }) {
       <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container flex h-14 items-center">
           <Link href="/" className="mr-6 flex items-center space-x-2">
-            <Wallet className="h-6 w-6 text-primary" />
+            {logoUrl ? (
+              <Image src={logoUrl} alt={`${appName} logo`} width={24} height={24} className="h-6 w-6" />
+            ) : (
+              <Wallet className="h-6 w-6 text-primary" />
+            )}
             <span className="font-bold sm:inline-block font-headline">
-              Class Cashier
+              {appName}
             </span>
           </Link>
           <div className="flex flex-1 items-center justify-end space-x-4">

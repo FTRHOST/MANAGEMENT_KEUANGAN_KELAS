@@ -32,6 +32,8 @@ export async function getSettings(): Promise<Settings> {
     const startDate = data.startDate instanceof Timestamp ? data.startDate.toDate().toISOString() : null;
 
     const settings: Settings = {
+        appName: data.appName || 'Class Cashier',
+        logoUrl: data.logoUrl || '',
         duesAmount,
         duesFrequency: data.duesFrequency || 'weekly',
         startDate: startDate,
@@ -41,6 +43,8 @@ export async function getSettings(): Promise<Settings> {
   }
   // Default settings if the document doesn't exist
   return {
+    appName: 'Class Cashier',
+    logoUrl: '',
     duesAmount: 2000,
     duesFrequency: 'weekly',
     startDate: null,
@@ -62,6 +66,7 @@ export async function updateSettings(settings: Settings) {
   await setDoc(settingsDoc, dataToSave, { merge: true });
   revalidatePath('/admin/settings');
   revalidatePath('/anggota', 'layout');
+  revalidatePath('/');
 }
 
 
@@ -123,7 +128,10 @@ export async function addTransaction(transaction: Omit<Transaction, 'id' | 'date
       // Fallback for other cases (Pemasukan without memberId)
       dataToSave.memberId = null;
       dataToSave.memberName = null;
-      dataToSave.treasurer = null;
+  }
+   
+  if (!dataToSave.treasurer) {
+    dataToSave.treasurer = null;
   }
 
   await addDoc(collection(db, 'transactions'), dataToSave);
@@ -162,7 +170,10 @@ export async function updateTransaction(id: string, transaction: Omit<Transactio
     } else {
       dataToUpdate.memberId = null;
       dataToUpdate.memberName = null;
-      dataToUpdate.treasurer = null;
+    }
+
+    if (!dataToUpdate.treasurer) {
+        dataToUpdate.treasurer = null;
     }
 
     await updateDoc(doc(db, 'transactions', id), dataToUpdate);
