@@ -13,7 +13,7 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import type { Member, Transaction } from '@/lib/types';
-import { ArrowDownCircle, ArrowUpCircle, Scale, Users } from 'lucide-react';
+import { ArrowDownCircle, ArrowUpCircle, Scale, Users, UserCheck } from 'lucide-react';
 
 function formatCurrency(amount: number) {
   return new Intl.NumberFormat('id-ID', {
@@ -41,8 +41,16 @@ export default function Dashboard({
 
     const finalBalance = totalIncome - totalExpenses;
     const totalMembers = members.length;
+    
+    const treasurer1Income = transactions
+      .filter((t) => t.treasurer === 'Bendahara 1')
+      .reduce((sum, t) => sum + t.amount, 0);
 
-    return { totalIncome, totalExpenses, finalBalance, totalMembers };
+    const treasurer2Income = transactions
+      .filter((t) => t.treasurer === 'Bendahara 2')
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    return { totalIncome, totalExpenses, finalBalance, totalMembers, treasurer1Income, treasurer2Income };
   }, [transactions, members]);
 
   const chartData = [
@@ -55,7 +63,7 @@ export default function Dashboard({
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
@@ -90,6 +98,28 @@ export default function Dashboard({
           <CardContent>
             <div className="text-2xl font-bold">
               {formatCurrency(stats.finalBalance)}
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Diterima Bendahara 1</CardTitle>
+            <UserCheck className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {formatCurrency(stats.treasurer1Income)}
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Diterima Bendahara 2</CardTitle>
+            <UserCheck className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {formatCurrency(stats.treasurer2Income)}
             </div>
           </CardContent>
         </Card>
