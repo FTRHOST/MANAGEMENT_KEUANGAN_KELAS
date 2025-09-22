@@ -1,4 +1,3 @@
-
 "use client";
 
 import {
@@ -7,8 +6,10 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
-  DialogFooter
-} from "@/components/ui/dialog";
+  DialogFooter,
+  DialogClose,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 import {
   Table,
   TableBody,
@@ -16,46 +17,39 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
-import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
+} from '@/components/ui/table';
 
-function formatCurrency(amount: number) {
-    return new Intl.NumberFormat('id-ID', {
-      style: 'currency',
-      currency: 'IDR',
-      minimumFractionDigits: 0,
-    }).format(amount);
-}
+type ArrearsDetail = {
+  label: string;
+};
 
 type DuesDetailDialogProps = {
   isOpen: boolean;
-  onClose: () => void;
-  arrearsDetails: { label: string; start: Date; end: Date }[];
-  duesAmount: number;
+  onOpenChange: (isOpen: boolean) => void;
+  arrearsDetails: ArrearsDetail[];
+  memberName: string;
 };
 
-export default function DuesDetailDialog({
+export function DuesDetailDialog({
   isOpen,
-  onClose,
+  onOpenChange,
   arrearsDetails,
-  duesAmount,
+  memberName,
 }: DuesDetailDialogProps) {
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-md">
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Rincian Tunggakan Iuran</DialogTitle>
+          <DialogTitle>Rincian Tunggakan - {memberName}</DialogTitle>
           <DialogDescription>
-            Berikut adalah daftar periode iuran yang belum Anda bayar.
+            Berikut adalah rincian periode iuran yang belum lunas.
           </DialogDescription>
         </DialogHeader>
-        <ScrollArea className="h-72">
+        <div className="max-h-60 overflow-y-auto">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Periode</TableHead>
-                <TableHead className="text-right">Jumlah</TableHead>
+                <TableHead>Periode Iuran</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -63,21 +57,22 @@ export default function DuesDetailDialog({
                 arrearsDetails.map((item, index) => (
                   <TableRow key={index}>
                     <TableCell>{item.label}</TableCell>
-                    <TableCell className="text-right">{formatCurrency(duesAmount)}</TableCell>
                   </TableRow>
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={2} className="text-center">
-                    Tidak ada tunggakan.
-                  </TableCell>
+                  <TableCell>Tidak ada tunggakan.</TableCell>
                 </TableRow>
               )}
             </TableBody>
           </Table>
-        </ScrollArea>
+        </div>
         <DialogFooter>
-          <Button onClick={onClose}>Tutup</Button>
+          <DialogClose asChild>
+            <Button type="button" variant="secondary">
+              Tutup
+            </Button>
+          </DialogClose>
         </DialogFooter>
       </DialogContent>
     </Dialog>
