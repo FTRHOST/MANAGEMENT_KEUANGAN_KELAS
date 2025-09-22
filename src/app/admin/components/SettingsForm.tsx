@@ -63,7 +63,7 @@ export default function SettingsForm({ currentSettings }: SettingsFormProps) {
       heroTitle: currentSettings.heroTitle || 'Bendahara Cerdas',
       heroDescription: currentSettings.heroDescription || 'Transparansi keuangan kelas di ujung jari Anda. Cari nama Anda untuk melihat status iuran.',
       duesAmount: currentSettings.duesAmount || 2000,
-      startDate: currentSettings.startDate ? new Date(currentSettings.startDate) : null,
+      startDate: currentSettings.startDate ? new Date(currentSettings.startDate.replace(/-/g, '/').replace(/T.+/, '')) : null,
       duesFrequency: currentSettings.duesFrequency || 'weekly',
     },
   });
