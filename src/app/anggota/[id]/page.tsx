@@ -58,16 +58,3 @@ export default async function AnggotaPage({ params }: { params: { id: string } }
     </div>
   );
 }
-
-export async function generateStaticParams() {
-  try {
-    const membersCol = collection(db, 'members');
-    const membersSnapshot = await getDocs(membersCol);
-    return membersSnapshot.docs.map(doc => ({
-      id: doc.id,
-    }));
-  } catch (error) {
-    console.error("Failed to generate static params:", error);
-    return [];
-  }
-}

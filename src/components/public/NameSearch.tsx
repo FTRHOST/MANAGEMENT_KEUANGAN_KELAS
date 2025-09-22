@@ -1,67 +1,72 @@
+
 "use client";
 
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, User } from 'lucide-react';
-import { Input } from '@/components/ui/input';
-import { Card, CardContent } from '@/components/ui/card';
 import type { Member } from '@/lib/types';
-import { ScrollArea } from '../ui/scroll-area';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
+import { User } from 'lucide-react';
 
-export default function NameSearch({ members }: { members: Member[] }) {
-  const [searchTerm, setSearchTerm] = useState('');
+type NameSearchProps = {
+  members: Member[];
+};
+
+export default function NameSearch({ members }: NameSearchProps) {
   const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [inputValue, setInputValue] = useState('');
 
-  const filteredMembers = useMemo(() => {
-    if (!searchTerm) return [];
-    return members.filter(member =>
-      member.name.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  }, [searchTerm, members]);
-
-  const handleMemberClick = (memberId: string) => {
+  const handleSelect = (memberId: string) => {
     router.push(`/anggota/${memberId}`);
   };
 
+  const filteredMembers = inputValue
+    ? members.filter((member) =>
+        member.name.toLowerCase().includes(inputValue.toLowerCase())
+      )
+    : [];
+
   return (
-    <div className="w-full max-w-md relative">
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-        <Input
-          type="text"
-          placeholder="Ketik nama Anda di sini..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="pl-10 text-lg h-14"
+    <div className="w-full max-w-md">
+      <Command shouldFilter={false} className="rounded-lg border shadow-md">
+        <CommandInput
+          placeholder="Cari nama atau NIM..."
+          value={inputValue}
+          onValueChange={setInputValue}
+          onFocus={() => setOpen(true)}
         />
-      </div>
-      {searchTerm && (
-        <Card className="absolute top-full mt-2 w-full z-10 shadow-lg">
-          <CardContent className="p-2">
-            <ScrollArea className="h-auto max-h-72">
-            {filteredMembers.length > 0 ? (
-              <ul>
-                {filteredMembers.map(member => (
-                  <li key={member.id}>
-                    <button
-                      onClick={() => handleMemberClick(member.id)}
-                      className="flex items-center w-full text-left p-3 rounded-md hover:bg-secondary transition-colors"
+        <CommandList>
+          {open && (
+            <>
+              {filteredMembers.length === 0 && inputValue.length > 2 && (
+                <CommandEmpty>Nama tidak ditemukan.</CommandEmpty>
+              )}
+              {filteredMembers.length > 0 && (
+                <CommandGroup heading="Anggota Ditemukan">
+                  {filteredMembers.map((member) => (
+                    <CommandItem
+                      key={member.id}
+                      onSelect={() => handleSelect(member.id)}
+                      value={member.name}
+                      className="flex items-center gap-2"
                     >
-                      <User className="mr-3 h-5 w-5 text-muted-foreground" />
-                      <span className="font-medium">{member.name}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="p-4 text-center text-muted-foreground">
-                Nama tidak ditemukan.
-              </p>
-            )}
-            </ScrollArea>
-          </CardContent>
-        </Card>
-      )}
+                      <User className="h-4 w-4" />
+                      <span>{member.name}</span>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              )}
+            </>
+          )}
+        </CommandList>
+      </Command>
     </div>
   );
 }

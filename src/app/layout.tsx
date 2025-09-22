@@ -4,36 +4,46 @@ import { Toaster } from '@/components/ui/toaster';
 import './globals.css';
 import { Header } from '@/components/Header';
 import { Analytics } from '@vercel/analytics/react';
+import { getSettings } from '@/lib/actions';
 
-export const metadata: Metadata = {
-  title: {
-    default: 'Class Cashier',
-    template: `%s | Class Cashier`,
-  },
-  description: 'Aplikasi Bendahara Cerdas untuk mengelola keuangan kas kelas.',
-  icons: {
-    icon: '/favicon.png',
-  },
-  openGraph: {
-    title: 'Class Cashier',
-    description: 'Aplikasi Bendahara Cerdas untuk mengelola keuangan kas kelas.',
-    images: [
-      {
-        url: '/favicon.png',
-        width: 800,
-        height: 600,
-        alt: `Class Cashier Logo`,
-      },
-    ],
-    type: 'website',
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: 'Class Cashier',
-    description: 'Aplikasi Bendahara Cerdas untuk mengelola keuangan kas kelas.',
-    images: ['/favicon.png'],
-  },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const settings = await getSettings();
+
+  const title = settings.appName || 'Class Cashier';
+  const description = settings.heroDescription || 'Aplikasi Bendahara Cerdas untuk mengelola keuangan kas kelas.';
+  const imageUrl = settings.logoUrl || '/favicon.png';
+
+  return {
+    title: {
+      default: title,
+      template: `%s | ${title}`,
+    },
+    description: description,
+    icons: {
+      icon: imageUrl,
+    },
+    openGraph: {
+      title: title,
+      description: description,
+      images: [
+        {
+          url: imageUrl,
+          width: 800,
+          height: 600,
+          alt: `${title} Logo`,
+        },
+      ],
+      type: 'website',
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: title,
+      description: description,
+      images: [imageUrl],
+    },
+  };
+}
+
 
 export default function RootLayout({
   children,
