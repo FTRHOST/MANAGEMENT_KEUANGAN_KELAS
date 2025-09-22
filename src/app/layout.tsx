@@ -18,6 +18,9 @@ export async function generateMetadata(): Promise<Metadata> {
       template: `%s | ${appName}`,
     },
     description: `Aplikasi Bendahara Cerdas untuk mengelola keuangan kas kelas - ${appName}.`,
+    icons: {
+      icon: settings.logoUrl || undefined,
+    },
   }
 }
 
