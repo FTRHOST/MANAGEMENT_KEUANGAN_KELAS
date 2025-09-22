@@ -10,12 +10,13 @@ export const metadata: Metadata = {
   description: 'Aplikasi Bendahara Cerdas untuk mengelola keuangan kas kelas.',
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const isAuthenticated = !!cookies().get('__session');
+  const cookieStore = cookies();
+  const isAuthenticated = !!cookieStore.get('__session');
 
   return (
     <html lang="id">
