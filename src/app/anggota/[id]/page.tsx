@@ -3,6 +3,7 @@ import { db } from '@/lib/firebase';
 import type { Member, Transaction } from '@/lib/types';
 import PersonalDashboard from '@/components/public/PersonalDashboard';
 import { notFound } from 'next/navigation';
+import ClassFinanceSummary from '@/components/public/ClassFinanceSummary';
 
 async function getData(memberId: string) {
   const memberRef = doc(db, 'members', memberId);
@@ -15,10 +16,14 @@ async function getData(memberId: string) {
 
   const transactionsCol = collection(db, 'transactions');
   const transactionsSnapshot = await getDocs(query(transactionsCol, orderBy('date', 'desc')));
-  const transactions = transactionsSnapshot.docs.map(doc => ({
-    id: doc.id,
-    ...doc.data(),
-  })) as Transaction[];
+  const transactions = transactionsSnapshot.docs.map(doc => {
+    const data = doc.data();
+    return {
+      id: doc.id,
+      ...data,
+      date: data.date.toDate().toISOString(),
+    } as unknown as Transaction;
+  });
 
   const membersCol = collection(db, 'members');
   const membersSnapshot = await getDocs(membersCol);
@@ -40,11 +45,13 @@ export default async function AnggotaPage({ params }: { params: { id: string } }
   const { member, transactions, allMembers } = data;
 
   return (
-    <PersonalDashboard
-      member={member}
-      transactions={transactions}
-      allMembers={allMembers}
-    />
+    <div className="space-y-8">
+      <PersonalDashboard
+        member={member}
+        transactions={transactions}
+      />
+      <ClassFinanceSummary transactions={transactions} />
+    </div>
   );
 }
 

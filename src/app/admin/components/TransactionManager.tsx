@@ -57,7 +57,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { PlusCircle, Edit, Trash2, Loader2, CalendarIcon } from 'lucide-react';
 import { format } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
-import { Timestamp } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
 
 
@@ -69,13 +68,16 @@ function formatCurrency(amount: number) {
     }).format(amount);
 }
   
-function formatDate(timestamp: any) {
-    if (!timestamp || !timestamp.toDate) return 'Tanggal tidak valid';
-    return timestamp.toDate().toLocaleDateString('id-ID', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    });
+function formatDate(dateValue: string | Date) {
+  const date = typeof dateValue === 'string' ? new Date(dateValue) : dateValue;
+  if (isNaN(date.getTime())) {
+    return 'Tanggal tidak valid';
+  }
+  return date.toLocaleDateString('id-ID', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
 }
 
 const transactionSchema = z.object({
@@ -119,7 +121,7 @@ export default function TransactionManager({ initialTransactions, members }: Tra
     if (transaction) {
       form.reset({
         ...transaction,
-        date: transaction.date.toDate(),
+        date: new Date(transaction.date),
       });
     } else {
       form.reset({ type: 'Pemasukan', amount: 0, description: '', date: new Date(), memberId: undefined, treasurer: undefined });

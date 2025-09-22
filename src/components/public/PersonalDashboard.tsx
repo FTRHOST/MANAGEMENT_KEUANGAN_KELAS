@@ -1,12 +1,13 @@
 "use client";
 
 import { useMemo, useState, useEffect } from 'react';
+import type { Member, Transaction } from '@/lib/types';
 import {
   Card,
   CardContent,
+  CardDescription,
   CardHeader,
   CardTitle,
-  CardDescription,
 } from '@/components/ui/card';
 import {
   Table,
@@ -17,17 +18,10 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import type { Member, Transaction } from '@/lib/types';
 import { getPeriodicDues } from '@/lib/actions';
+import { Skeleton } from '../ui/skeleton';
+import { AlertCircle, CheckCircle2, TrendingDown, TrendingUp, Wallet } from 'lucide-react';
 import useLocalStorage from '@/hooks/use-local-storage';
-import { Skeleton } from '@/components/ui/skeleton';
-import { ArrowDownCircle, ArrowUpCircle, Banknote, Scale, Users } from 'lucide-react';
-
-type PersonalDashboardProps = {
-  member: Member;
-  transactions: Transaction[];
-  allMembers: Member[];
-};
 
 function formatCurrency(amount: number) {
   return new Intl.NumberFormat('id-ID', {
@@ -37,130 +31,138 @@ function formatCurrency(amount: number) {
   }).format(amount);
 }
 
-function formatDate(timestamp: any) {
-  if (!timestamp || !timestamp.toDate) return 'Tanggal tidak valid';
-  return timestamp.toDate().toLocaleDateString('id-ID', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  });
-}
+type PersonalDashboardProps = {
+  member: Member;
+  transactions: Transaction[];
+};
 
 export default function PersonalDashboard({
   member,
   transactions,
-  allMembers,
 }: PersonalDashboardProps) {
   const [startDate] = useLocalStorage<string | null>('kas-start-date', null);
-  const [periodicDues, setPeriodicDues] = useState(0);
-  const [isLoadingDues, setIsLoadingDues] = useState(true);
+  const [totalDues, setTotalDues] = useState<number | null>(null);
+  const [isLoadingDues, setLoadingDues] = useState(true);
 
   useEffect(() => {
-    async function fetchDues() {
-      setIsLoadingDues(true);
-      const result = await getPeriodicDues(startDate);
-      setPeriodicDues(result.totalDues);
-      setIsLoadingDues(false);
-    }
+    const fetchDues = async () => {
+      setLoadingDues(true);
+      try {
+        const result = await getPeriodicDues(startDate);
+        setTotalDues(result.totalDues);
+      } catch (error) {
+        console.error("Failed to fetch periodic dues:", error);
+        setTotalDues(0); // Fallback to 0 if AI call fails
+      }
+      setLoadingDues(false);
+    };
+
     fetchDues();
   }, [startDate]);
 
-  const financials = useMemo(() => {
-    const memberDeposits = transactions.filter(
-      t => t.type === 'Pemasukan' && t.memberId === member.id
+  const memberTransactions = useMemo(() => {
+    return transactions.filter(
+      (t) => t.type === 'Pemasukan' && t.memberId === member.id
     );
-    const totalDeposits = memberDeposits.reduce((sum, t) => sum + t.amount, 0);
+  }, [transactions, member.id]);
 
-    const totalExpenses = transactions
-      .filter(t => t.type === 'Pengeluaran')
-      .reduce((sum, t) => sum + t.amount, 0);
-    
-    const sharedExpensePerMember = allMembers.length > 0 ? totalExpenses / allMembers.length : 0;
+  const totalDeposits = useMemo(() => {
+    return memberTransactions.reduce((sum, t) => sum + t.amount, 0);
+  }, [memberTransactions]);
 
-    const totalLiability = periodicDues + sharedExpensePerMember;
-    const finalBalance = totalDeposits - totalLiability;
+  const finalBalance = useMemo(() => {
+    if (totalDues === null) return null;
+    return totalDeposits - totalDues;
+  }, [totalDeposits, totalDues]);
 
-    const totalIncomeClass = transactions
-      .filter(t => t.type === 'Pemasukan')
-      .reduce((sum, t) => sum + t.amount, 0);
-    
-    const classBalance = totalIncomeClass - totalExpenses;
-
+  const balanceStatus = useMemo(() => {
+    if (finalBalance === null) {
+      return {
+        text: 'Menghitung...',
+        color: 'bg-gray-500',
+        icon: <Skeleton className="h-6 w-6 rounded-full" />,
+      };
+    }
+    if (finalBalance >= 0) {
+      return {
+        text: 'Lunas',
+        color: 'bg-green-500',
+        icon: <CheckCircle2 className="h-6 w-6 text-white" />,
+      };
+    }
     return {
-      memberDeposits,
-      totalDeposits,
-      totalLiability,
-      finalBalance,
-      totalIncomeClass,
-      totalExpenses,
-      classBalance
+      text: 'Belum Lunas',
+      color: 'bg-red-500',
+      icon: <AlertCircle className="h-6 w-6 text-white" />,
     };
-  }, [transactions, member.id, allMembers.length, periodicDues]);
+  }, [finalBalance]);
 
-  const { memberDeposits, totalDeposits, totalLiability, finalBalance, totalIncomeClass, totalExpenses, classBalance } = financials;
-
-  const getStatus = (balance: number) => {
-    if (balance >= 0) return { text: 'Lunas', color: 'bg-green-500' };
-    return { text: 'Kurang Bayar', color: 'bg-destructive' };
-  };
-
-  const balanceStatus = getStatus(finalBalance);
 
   return (
-    <div className="space-y-8">
-      <div className="text-center">
-        <h1 className="text-3xl font-bold font-headline">Dashboard Keuangan {member.name}</h1>
-        <p className="text-muted-foreground">Selamat datang kembali! Berikut adalah rincian keuangan Anda.</p>
+    <div>
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold font-headline">
+          Dashboard Keuangan, {member.name}
+        </h1>
+        <p className="text-muted-foreground">
+          Berikut adalah rincian keuangan iuran kas kelas Anda.
+        </p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Setoran</CardTitle>
-            <ArrowUpCircle className="h-4 w-4 text-muted-foreground" />
+            <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(totalDeposits)}</div>
-            <p className="text-xs text-muted-foreground">
-              Total uang yang telah Anda setorkan.
-            </p>
+            <div className="text-2xl font-bold">
+              {formatCurrency(totalDeposits)}
+            </div>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Tagihan</CardTitle>
-            <ArrowDownCircle className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Total Iuran</CardTitle>
+            <TrendingDown className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            {isLoadingDues ? <Skeleton className="h-8 w-3/4" /> : <div className="text-2xl font-bold">{formatCurrency(totalLiability)}</div>}
-            <p className="text-xs text-muted-foreground">
-              Total iuran mingguan & pembagian pengeluaran.
-            </p>
+            {isLoadingDues ? (
+                <Skeleton className="h-8 w-3/4" />
+            ) : (
+                <div className="text-2xl font-bold">
+                    {formatCurrency(totalDues ?? 0)}
+                </div>
+            )}
           </CardContent>
         </Card>
-        <Card>
+        <Card className="lg:col-span-2">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Saldo Akhir</CardTitle>
-             <Scale className="h-4 w-4 text-muted-foreground" />
+            <Wallet className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            {isLoadingDues ? <Skeleton className="h-8 w-3/4" /> : 
+          {finalBalance === null ? (
+             <Skeleton className="h-8 w-1/2" />
+          ) : (
             <>
-              <div className={`text-2xl font-bold ${finalBalance < 0 ? 'text-destructive' : 'text-green-600'}`}>
-                {formatCurrency(finalBalance)}
+              <div className="text-2xl font-bold">{formatCurrency(finalBalance)}</div>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <span className={`flex h-2 w-2 rounded-full ${balanceStatus.color}`} />
+                  {balanceStatus.text}
               </div>
-              <p className="text-xs text-muted-foreground">
-                Status: <span className={`font-semibold ${finalBalance < 0 ? 'text-destructive' : 'text-green-600'}`}>{balanceStatus.text}</span>
-              </p>
             </>
-            }
+          )}
           </CardContent>
         </Card>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Riwayat Setoran Pribadi</CardTitle>
+          <CardTitle>Riwayat Setoran</CardTitle>
+          <CardDescription>
+            Berikut adalah daftar semua setoran iuran kas yang telah Anda lakukan.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
@@ -168,100 +170,26 @@ export default function PersonalDashboard({
               <TableRow>
                 <TableHead>Tanggal</TableHead>
                 <TableHead>Deskripsi</TableHead>
+                <TableHead>Penerima</TableHead>
                 <TableHead className="text-right">Jumlah</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {memberDeposits.length > 0 ? (
-                memberDeposits.map(t => (
+              {memberTransactions.length > 0 ? (
+                memberTransactions.map((t) => (
                   <TableRow key={t.id}>
-                    <TableCell>{formatDate(t.date)}</TableCell>
+                    <TableCell>{new Date(t.date).toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' })}</TableCell>
                     <TableCell>{t.description}</TableCell>
-                    <TableCell className="text-right">{formatCurrency(t.amount)}</TableCell>
-                  </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={3} className="text-center">
-                    Belum ada setoran.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-      
-      <div className="space-y-4 pt-8 border-t">
-        <div className="text-center">
-            <h2 className="text-2xl font-bold font-headline">Transparansi Keuangan Kelas</h2>
-            <p className="text-muted-foreground">Ringkasan dan riwayat transaksi seluruh kelas.</p>
-        </div>
-        <div className="grid gap-4 md:grid-cols-3">
-             <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Total Pemasukan Kelas</CardTitle>
-                    <ArrowUpCircle className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                    <div className="text-2xl font-bold">{formatCurrency(totalIncomeClass)}</div>
-                </CardContent>
-            </Card>
-            <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Total Pengeluaran Kelas</CardTitle>
-                    <ArrowDownCircle className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                    <div className="text-2xl font-bold">{formatCurrency(totalExpenses)}</div>
-                </CardContent>
-            </Card>
-            <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Saldo Kas Kelas</CardTitle>
-                    <Banknote className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                    <div className="text-2xl font-bold">{formatCurrency(classBalance)}</div>
-                </CardContent>
-            </Card>
-        </div>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Riwayat Transaksi Kelas</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Tanggal</TableHead>
-                <TableHead>Tipe</TableHead>
-                <TableHead>Nama / Deskripsi</TableHead>
-                <TableHead className="text-right">Jumlah</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {transactions.length > 0 ? (
-                transactions.map(t => (
-                  <TableRow key={t.id}>
-                    <TableCell>{formatDate(t.date)}</TableCell>
-                    <TableCell>
-                      <Badge variant={t.type === 'Pemasukan' ? 'default' : 'destructive'} className={`${t.type === 'Pemasukan' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                        {t.type}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>{t.type === 'Pemasukan' ? t.memberName : t.description}</TableCell>
-                    <TableCell className={`text-right font-medium ${t.type === 'Pemasukan' ? 'text-green-600' : 'text-destructive'}`}>
-                        {t.type === 'Pemasukan' ? '+' : '-'} {formatCurrency(t.amount)}
+                    <TableCell>{t.treasurer}</TableCell>
+                    <TableCell className="text-right font-medium text-green-600">
+                      {formatCurrency(t.amount)}
                     </TableCell>
                   </TableRow>
                 ))
               ) : (
                 <TableRow>
                   <TableCell colSpan={4} className="text-center">
-                    Belum ada transaksi.
+                    Belum ada riwayat setoran.
                   </TableCell>
                 </TableRow>
               )}

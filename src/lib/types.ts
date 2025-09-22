@@ -1,5 +1,3 @@
-import type { Timestamp } from 'firebase/firestore';
-
 export type Member = {
   id: string;
   name: string;
@@ -9,7 +7,7 @@ export type Transaction = {
   id: string;
   type: 'Pemasukan' | 'Pengeluaran';
   amount: number;
-  date: Timestamp;
+  date: string; // Changed from Timestamp to string
   description: string;
   memberId?: string;
   memberName?: string;

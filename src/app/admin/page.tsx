@@ -10,10 +10,14 @@ async function getAdminData() {
 
   const transactionsCol = collection(db, 'transactions');
   const transactionsSnapshot = await getDocs(query(transactionsCol, orderBy('date', 'desc')));
-  const transactions = transactionsSnapshot.docs.map(doc => ({
-    id: doc.id,
-    ...doc.data(),
-  })) as Transaction[];
+  const transactions = transactionsSnapshot.docs.map(doc => {
+    const data = doc.data();
+    return {
+      id: doc.id,
+      ...data,
+      date: data.date.toDate().toISOString(),
+    } as unknown as Transaction;
+  });
   
   return { members, transactions };
 }
