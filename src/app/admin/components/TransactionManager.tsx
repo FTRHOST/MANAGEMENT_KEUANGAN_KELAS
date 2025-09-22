@@ -90,8 +90,13 @@ const transactionSchema = z.object({
   memberId: z.string().optional(),
   treasurer: z.enum(['Bendahara 1', 'Bendahara 2']).optional(),
 }).refine(data => {
+    // Member is mandatory for "Pemasukan"
     if (data.type === 'Pemasukan') {
         return !!data.memberId;
+    }
+    // Member is optional for "Pengeluaran", but if it exists, it must be a string
+    if (data.type === 'Pengeluaran' && data.memberId !== undefined) {
+        return typeof data.memberId === 'string';
     }
     return true;
 }, {
@@ -123,6 +128,7 @@ export default function TransactionManager({ initialTransactions, members }: Tra
     if (transaction) {
       form.reset({
         ...transaction,
+        amount: Math.abs(transaction.amount),
         date: new Date(transaction.date),
       });
     } else {
@@ -306,6 +312,7 @@ export default function TransactionManager({ initialTransactions, members }: Tra
                 )}
 
                 {transactionType === 'Pengeluaran' && (
+                  <>
                    <FormField
                         control={form.control}
                         name="description"
@@ -319,6 +326,26 @@ export default function TransactionManager({ initialTransactions, members }: Tra
                             </FormItem>
                         )}
                     />
+                    <FormField
+                      control={form.control}
+                      name="memberId"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Dibebankan ke (Opsional)</FormLabel>
+                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <FormControl><SelectTrigger><SelectValue placeholder="Pilih anggota jika pengeluaran pribadi" /></SelectTrigger></FormControl>
+                            <SelectContent>
+                              {members.map(m => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                           <p className="text-xs text-muted-foreground">
+                              Jika tidak dipilih, akan menjadi pengeluaran bersama. Jika kas kurang, akan dibebankan ke semua anggota.
+                           </p>
+                        </FormItem>
+                      )}
+                    />
+                  </>
                 )}
 
 

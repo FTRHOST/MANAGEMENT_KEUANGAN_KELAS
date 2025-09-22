@@ -43,7 +43,7 @@ export async function getSettings(): Promise<Settings> {
   return {
     duesAmount: 2000,
     duesFrequency: 'weekly',
-    startDate: new Date().toISOString(),
+    startDate: null,
   };
 }
 
@@ -52,8 +52,11 @@ export async function updateSettings(settings: Settings) {
   const dataToSave: any = {
     ...settings,
     duesAmount: Number(settings.duesAmount) || 0,
-    startDate: settings.startDate ? Timestamp.fromDate(new Date(settings.startDate)) : null,
   };
+  // Remove deprecated fields
+  delete dataToSave.startDate;
+  delete dataToSave.duesFrequency;
+  
   await setDoc(settingsDoc, dataToSave, { merge: true });
   revalidatePath('/admin/settings');
   revalidatePath('/anggota', 'layout');
@@ -107,15 +110,10 @@ export async function addTransaction(transaction: Omit<Transaction, 'id' | 'date
      await addDoc(collection(db, 'transactions'), dataToSave);
   } else if (transaction.type === 'Pengeluaran') {
     
+    // Get current balance
     const transactionsCol = collection(db, 'transactions');
     const transactionsSnapshot = await getDocs(transactionsCol);
-    const allTransactions = transactionsSnapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-            ...data,
-            date: data.date.toDate().toISOString(),
-        } as unknown as Transaction;
-    });
+    const allTransactions = transactionsSnapshot.docs.map(doc => doc.data() as Transaction);
     
     const totalIncome = allTransactions.filter(t => t.type === 'Pemasukan').reduce((sum, t) => sum + t.amount, 0);
     const totalExpenses = allTransactions.filter(t => t.type === 'Pengeluaran').reduce((sum, t) => sum + t.amount, 0);
@@ -126,7 +124,7 @@ export async function addTransaction(transaction: Omit<Transaction, 'id' | 'date
     
     const batch = writeBatch(db);
 
-    // Use from balance first
+    // Use amount from balance first
     const fromBalance = Math.min(currentBalance, expenseAmount);
     if (fromBalance > 0) {
       const expenseFromBalance = {
@@ -140,7 +138,7 @@ export async function addTransaction(transaction: Omit<Transaction, 'id' | 'date
       batch.set(doc(collection(db, 'transactions')), expenseFromBalance);
     }
 
-    // Distribute shortfall to members
+    // Distribute shortfall to all members
     const shortfall = expenseAmount - fromBalance;
     if (shortfall > 0) {
       const membersSnapshot = await getDocs(collection(db, 'members'));
@@ -148,6 +146,7 @@ export async function addTransaction(transaction: Omit<Transaction, 'id' | 'date
       const memberCount = members.length;
 
       if (memberCount > 0) {
+        // Use Math.ceil to ensure the full shortfall is covered
         const costPerMember = Math.ceil(shortfall / memberCount);
         const memberExpenseDescription = `Iuran untuk: ${expenseDescription}`;
         
@@ -169,7 +168,7 @@ export async function addTransaction(transaction: Omit<Transaction, 'id' | 'date
     await batch.commit();
 
   } else {
-      // Fallback for other cases or Pemasukan without memberId
+      // Fallback for other cases (Pemasukan without memberId)
       dataToSave.memberId = null;
       dataToSave.memberName = null;
       dataToSave.treasurer = null;
@@ -198,8 +197,14 @@ export async function updateTransaction(id: string, transaction: Omit<Transactio
     }
 
     if (transaction.type === 'Pengeluaran') {
-        dataToUpdate.memberId = dataToUpdate.memberId || null;
-        dataToUpdate.memberName = dataToUpdate.memberName || null;
+        // Preserve memberId if it exists (for individual member expenses)
+        dataToUpdate.memberId = transaction.memberId || null;
+        if (dataToUpdate.memberId && !transaction.memberName) {
+           const memberDoc = await getDoc(doc(db, 'members', dataToUpdate.memberId));
+           if(memberDoc.exists()) dataToUpdate.memberName = memberDoc.data().name;
+        } else {
+            dataToUpdate.memberName = transaction.memberName || null;
+        }
         dataToUpdate.treasurer = null;
     }
 
