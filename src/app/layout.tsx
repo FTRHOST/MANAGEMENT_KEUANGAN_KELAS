@@ -9,10 +9,11 @@ import { getSettings } from '@/lib/actions';
 import type { Settings } from '@/lib/types';
 
 export async function generateMetadata(): Promise<Metadata> {
-  const settings: Settings = await getSettings();
-  const appName = settings.appName || 'Class Cashier';
-  const description = settings.heroDescription || `Aplikasi Bendahara Cerdas untuk mengelola keuangan kas kelas - ${appName}.`;
-  const logoUrl = settings.logoUrl || '';
+  // To stabilize the build, we will use static metadata for now.
+  // The dynamic properties were causing server-side rendering issues.
+  const appName = 'Class Cashier';
+  const description = 'Aplikasi Bendahara Cerdas untuk mengelola keuangan kas kelas.';
+  const logoUrl = '/favicon.png';
  
   return {
     title: {
@@ -21,26 +22,26 @@ export async function generateMetadata(): Promise<Metadata> {
     },
     description: description,
     icons: {
-      icon: logoUrl || undefined,
+      icon: '/favicon.png',
     },
     openGraph: {
       title: appName,
       description: description,
-      images: logoUrl ? [
+      images: [
         {
           url: logoUrl,
           width: 800,
           height: 600,
           alt: `${appName} Logo`,
         },
-      ] : [],
+      ],
       type: 'website',
     },
     twitter: {
       card: 'summary_large_image',
       title: appName,
       description: description,
-      images: logoUrl ? [logoUrl] : [],
+      images: [logoUrl],
     },
   }
 }
@@ -76,3 +77,4 @@ export default async function RootLayout({
     </html>
   );
 }
+
