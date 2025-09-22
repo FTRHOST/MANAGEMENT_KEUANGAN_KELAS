@@ -16,6 +16,9 @@ async function getData(memberId: string) {
   }
   const member = { id: memberSnap.id, ...memberSnap.data() } as Member;
 
+  const allMembersSnapshot = await getDocs(collection(db, 'members'));
+  const totalMembers = allMembersSnapshot.size;
+
   const transactionsCol = collection(db, 'transactions');
   const transactionsSnapshot = await getDocs(query(transactionsCol, orderBy('date', 'desc')));
   const transactions = transactionsSnapshot.docs.map(doc => {
@@ -30,7 +33,7 @@ async function getData(memberId: string) {
   const cashierDays = await getCashierDays();
   const settings = await getSettings();
 
-  return { member, transactions, cashierDays, settings };
+  return { member, transactions, cashierDays, settings, totalMembers };
 }
 
 export default async function AnggotaPage({ params }: { params: { id: string } }) {
@@ -40,15 +43,16 @@ export default async function AnggotaPage({ params }: { params: { id: string } }
     notFound();
   }
 
-  const { member, transactions, cashierDays, settings } = data;
+  const { member, transactions, cashierDays, settings, totalMembers } = data;
 
   return (
     <div className="space-y-8">
       <PersonalDashboard
         member={member}
-        transactions={transactions}
+        allTransactions={transactions}
         cashierDays={cashierDays}
         settings={settings}
+        totalMembers={totalMembers}
       />
       <ClassFinanceSummary transactions={transactions} />
     </div>

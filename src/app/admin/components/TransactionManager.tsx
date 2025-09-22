@@ -56,10 +56,11 @@ import { useToast } from '@/hooks/use-toast';
 import { addTransaction, updateTransaction, deleteTransaction } from '@/lib/actions';
 import type { Member, Transaction } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { PlusCircle, Edit, Trash2, Loader2, CalendarIcon } from 'lucide-react';
+import { PlusCircle, Edit, Trash2, Loader2, CalendarIcon, Users } from 'lucide-react';
 import { format } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 
 function formatCurrency(amount: number) {
@@ -189,7 +190,22 @@ export default function TransactionManager({ initialTransactions, members }: Tra
                         {transaction.type}
                     </Badge>
                   </TableCell>
-                  <TableCell className="font-medium">{transaction.memberName ?? transaction.description}</TableCell>
+                  <TableCell className="font-medium">
+                    {transaction.memberName ? (
+                        transaction.memberName
+                    ) : (
+                        <TooltipProvider>
+                            <Tooltip>
+                                <TooltipTrigger className="flex items-center gap-1 cursor-default">
+                                    {transaction.description} <Users className="h-3 w-3 text-muted-foreground"/>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                    <p>Pengeluaran bersama</p>
+                                </TooltipContent>
+                            </Tooltip>
+                        </TooltipProvider>
+                    )}
+                  </TableCell>
                   <TableCell>{transaction.treasurer || '-'}</TableCell>
                   <TableCell className={`text-right font-semibold ${transaction.type === 'Pemasukan' ? 'text-green-600' : 'text-destructive'}`}>
                     {transaction.type === 'Pemasukan' ? '+' : '-'} {formatCurrency(transaction.amount)}
@@ -334,10 +350,10 @@ export default function TransactionManager({ initialTransactions, members }: Tra
                               {members.map(m => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}
                             </SelectContent>
                           </Select>
-                          <FormMessage />
                            <p className="text-xs text-muted-foreground">
-                              Jika tidak dipilih, akan menjadi pengeluaran bersama. Jika kas kurang, akan dibebankan ke semua anggota.
+                              Jika tidak dipilih, akan menjadi pengeluaran bersama.
                            </p>
+                          <FormMessage />
                         </FormItem>
                       )}
                     />
@@ -401,5 +417,3 @@ export default function TransactionManager({ initialTransactions, members }: Tra
     </Card>
   );
 }
-
-    
