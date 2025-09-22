@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -58,6 +58,14 @@ type MemberManagerProps = {
   transactions: Transaction[];
 };
 
+function formatCurrency(amount: number) {
+  return new Intl.NumberFormat('id-ID', {
+    style: 'currency',
+    currency: 'IDR',
+    minimumFractionDigits: 0,
+  }).format(amount);
+}
+
 export default function MemberManager({ initialMembers, transactions }: MemberManagerProps) {
   const { toast } = useToast();
   const [members, setMembers] = useState(initialMembers);
@@ -109,11 +117,37 @@ export default function MemberManager({ initialMembers, transactions }: MemberMa
     }
   };
 
+  const memberBalances = useMemo(() => {
+    const balances = new Map<string, number>();
+    const totalMembers = members.length > 0 ? members.length : 1;
+
+    const sharedExpenses = transactions
+      .filter((t) => t.type === 'Pengeluaran' && !t.memberId)
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    const sharedExpensePerMember = sharedExpenses / totalMembers;
+
+    members.forEach(member => {
+      const totalPaid = transactions
+        .filter(t => t.type === 'Pemasukan' && t.memberId === member.id)
+        .reduce((sum, t) => sum + t.amount, 0);
+
+      const personalExpenses = transactions
+        .filter(t => t.type === 'Pengeluaran' && t.memberId === member.id)
+        .reduce((sum, t) => sum + t.amount, 0);
+
+      const balance = totalPaid - personalExpenses - sharedExpensePerMember;
+      balances.set(member.id, balance);
+    });
+    return balances;
+  }, [members, transactions]);
+
+
   return (
     <Card>
       <CardHeader>
         <CardTitle>Manajemen Anggota</CardTitle>
-        <CardDescription>Tambah, edit, atau hapus anggota kelas.</CardDescription>
+        <CardDescription>Tambah, edit, atau hapus anggota kelas beserta saldo personalnya.</CardDescription>
       </CardHeader>
       <CardContent>
         <div className="text-right mb-4">
@@ -126,58 +160,65 @@ export default function MemberManager({ initialMembers, transactions }: MemberMa
             <TableHeader>
               <TableRow>
                 <TableHead>Nama Anggota</TableHead>
+                <TableHead>Saldo Personal</TableHead>
                 <TableHead className="text-right">Aksi</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {members.map((member) => (
-                <TableRow key={member.id}>
-                  <TableCell className="font-medium">{member.name}</TableCell>
-                  <TableCell className="text-right">
-                    <TooltipProvider>
-                      <Button variant="ghost" size="icon" onClick={() => handleDialogOpen(member)}>
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      {memberHasTransactions(member.id) ? (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <span tabIndex={0}>
-                              <Button variant="ghost" size="icon" disabled>
-                                <Ban className="h-4 w-4" />
+              {members.map((member) => {
+                const balance = memberBalances.get(member.id) ?? 0;
+                return (
+                  <TableRow key={member.id}>
+                    <TableCell className="font-medium">{member.name}</TableCell>
+                    <TableCell className={balance >= 0 ? 'text-green-600' : 'text-destructive'}>
+                      {formatCurrency(balance)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <TooltipProvider>
+                        <Button variant="ghost" size="icon" onClick={() => handleDialogOpen(member)}>
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        {memberHasTransactions(member.id) ? (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span tabIndex={0}>
+                                <Button variant="ghost" size="icon" disabled>
+                                  <Ban className="h-4 w-4" />
+                                </Button>
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Anggota tidak bisa dihapus karena memiliki riwayat transaksi.</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        ) : (
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive">
+                                <Trash2 className="h-4 w-4" />
                               </Button>
-                            </span>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p>Anggota tidak bisa dihapus karena memiliki riwayat transaksi.</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      ) : (
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive">
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Anda yakin?</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Tindakan ini tidak dapat dibatalkan. Ini akan menghapus anggota secara permanen.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Batal</AlertDialogCancel>
-                              <AlertDialogAction onClick={() => handleDelete(member.id)}>
-                                Hapus
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      )}
-                    </TooltipProvider>
-                  </TableCell>
-                </TableRow>
-              ))}
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Anda yakin?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Tindakan ini tidak dapat dibatalkan. Ini akan menghapus anggota secara permanen.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Batal</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => handleDelete(member.id)}>
+                                  Hapus
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        )}
+                      </TooltipProvider>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </div>
