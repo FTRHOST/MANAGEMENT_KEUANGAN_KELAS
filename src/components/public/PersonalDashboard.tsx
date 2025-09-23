@@ -2,18 +2,10 @@
 "use client";
 
 import { useMemo } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
 import type { Member, Transaction, CashierDay, Settings } from '@/lib/types';
-import { ArrowDown, ArrowUp, Banknote, Coins, FileWarning, PiggyBank, Scale, Wallet } from 'lucide-react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { Badge } from '../ui/badge';
 import { format } from 'date-fns';
 import { id } from 'date-fns/locale';
 
@@ -25,212 +17,230 @@ function formatCurrency(amount: number) {
   }).format(amount);
 }
 
-type DetailsListProps = {
-  title: string;
-  amount: number;
-  items: { id: string; description: string; amount: number; date?: string; type: 'paid' | 'unpaid' | 'expense' }[];
-};
-
-function DetailsList({ title, amount, items }: DetailsListProps) {
-    if (items.length === 0) return null;
-    return (
-        <div>
-            <h4 className="font-semibold mb-2">{title} ({formatCurrency(amount)})</h4>
-            <div className="rounded-md border max-h-60 overflow-y-auto">
-                <Table>
-                    <TableBody>
-                        {items.map(item => (
-                            <TableRow key={item.id}>
-                                <TableCell>
-                                    <p className="font-medium">{item.description}</p>
-                                    {item.date && (
-                                         <p className="text-xs text-muted-foreground">
-                                            {format(new Date(item.date), 'PPP', { locale: id })}
-                                        </p>
-                                    )}
-                                </TableCell>
-                                <TableCell className="text-right font-medium">
-                                    {formatCurrency(item.amount)}
-                                </TableCell>
-                            </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
-            </div>
-        </div>
-    );
+function formatDate(dateString: string) {
+  return format(new Date(dateString), "d MMMM yyyy", { locale: id });
 }
 
 
-export function PersonalDashboard({
-  member,
-  allTransactions,
-  cashierDays,
-  settings,
-  totalMembers,
-}: {
+type TransactionListProps = {
+  title: string;
+  transactions: { description: string; amount: number; date: string }[];
+  totalAmount: number;
+  emptyText: string;
+};
+
+function TransactionList({ title, transactions, totalAmount, emptyText }: TransactionListProps) {
+  return (
+    <div>
+      <h4 className="font-semibold mb-2">{title} ({formatCurrency(totalAmount)})</h4>
+      {transactions.length > 0 ? (
+        <ul className="space-y-2">
+          {transactions.map((item, index) => (
+            <li key={index} className="flex justify-between items-center p-2 rounded-md bg-gray-50">
+              <div>
+                <p className="text-sm font-medium">{item.description}</p>
+                <p className="text-xs text-muted-foreground">{formatDate(item.date)}</p>
+              </div>
+              <span className="text-sm font-semibold">{formatCurrency(item.amount)}</span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-sm text-muted-foreground">{emptyText}</p>
+      )}
+    </div>
+  );
+}
+
+
+type PersonalDashboardProps = {
   member: Member;
   allTransactions: Transaction[];
   cashierDays: CashierDay[];
   settings: Settings;
   totalMembers: number;
-}) {
+};
 
+export function PersonalDashboard({ member, allTransactions, cashierDays, settings, totalMembers }: PersonalDashboardProps) {
   const duesPerMeeting = settings.duesAmount || 0;
 
   const {
     totalPaid,
     totalDues,
+    paidDuesTransactions,
+    unpaidDues,
+    personalExpenses,
+    sharedExpensePerMember,
     totalExpenses,
     finalBalance,
-    totalBill,
-    paidDuesDetails,
-    unpaidDuesDetails,
-    personalExpensesDetails,
-    sharedExpensePerMember,
+    totalBill
   } = useMemo(() => {
-    // 1. Total Pembayaran
-    const totalPaid = allTransactions
-      .filter(t => t.type === 'Pemasukan' && t.memberId === member.id)
-      .reduce((sum, t) => sum + t.amount, 0);
+    const memberTransactions = allTransactions.filter(t => t.memberId === member.id);
+    const paidDuesTransactions = memberTransactions.filter(t => t.type === 'Pemasukan');
+    const totalPaid = paidDuesTransactions.reduce((sum, t) => sum + t.amount, 0);
 
-    // 2. Total Iuran Wajib
+    const personalExpenses = memberTransactions.filter(t => t.type === 'Pengeluaran');
+    const personalExpensesTotal = personalExpenses.reduce((sum, t) => sum + t.amount, 0);
+
+    const sharedExpenses = allTransactions.filter(t => t.type === 'Pengeluaran' && !t.memberId);
+    const sharedExpensesTotal = sharedExpenses.reduce((sum, t) => sum + t.amount, 0);
+    const validTotalMembers = totalMembers > 0 ? totalMembers : 1;
+    const sharedExpensePerMember = sharedExpensesTotal / validTotalMembers;
+    
+    const totalExpenses = personalExpensesTotal + sharedExpensePerMember;
+
     const totalDues = cashierDays.length * duesPerMeeting;
 
-    // 3. Total Beban Pengeluaran
-    const personalExpenses = allTransactions
-      .filter(t => t.type === 'Pengeluaran' && t.memberId === member.id)
-      .reduce((sum, t) => sum + t.amount, 0);
-      
-    const sharedExpensesTotal = allTransactions
-      .filter((t) => t.type === 'Pengeluaran' && !t.memberId)
-      .reduce((sum, t) => sum + t.amount, 0);
+    // Logic for paid/unpaid cashier days
+    const paidDates = new Set(paidDuesTransactions.map(t => format(new Date(t.date), 'yyyy-MM-dd')));
+    const unpaidDues = cashierDays.filter(day => !paidDates.has(format(new Date(day.date), 'yyyy-MM-dd')));
 
-    const sharedExpensePerMember = totalMembers > 0 ? sharedExpensesTotal / totalMembers : 0;
-    const totalExpenses = personalExpenses + sharedExpensePerMember;
-
-    // 4. Total Tagihan (dengan logika baru)
-    let totalBill = 0;
+    // Conditional total bill logic
+    let totalBill;
     if (totalDues > totalExpenses) {
         totalBill = totalDues;
     } else {
         totalBill = totalDues + totalExpenses;
     }
 
-    // 5. Saldo Akhir
-    const finalBalance = totalPaid - totalBill;
+    // New Final Balance Calculation
+    const finalBalance = totalPaid - totalExpenses;
 
-    // --- Rincian untuk ditampilkan ---
-    const memberPayments = allTransactions.filter(t => t.memberId === member.id && t.type === 'Pemasukan');
-
-    // Menentukan iuran mana yang sudah terbayar dan mana yang belum
-    let paidDuesCount = Math.floor(totalPaid / duesPerMeeting);
-    const paidDuesDetails = cashierDays
-        .slice(0, paidDuesCount)
-        .map(day => ({...day, type: 'paid' as const, amount: duesPerMeeting}));
-
-    const unpaidDuesDetails = cashierDays
-        .slice(paidDuesCount)
-        .map(day => ({...day, type: 'unpaid' as const, amount: duesPerMeeting}));
-    
-    const personalExpensesDetails = allTransactions
-      .filter(t => t.type === 'Pengeluaran' && t.memberId === member.id)
-      .map(t => ({ id: t.id, description: t.description, amount: t.amount, date: t.date, type: 'expense' as const }));
-
-    return { totalPaid, totalDues, totalExpenses, finalBalance, totalBill, paidDuesDetails, unpaidDuesDetails, personalExpensesDetails, sharedExpensePerMember };
+    return {
+      totalPaid,
+      totalDues,
+      paidDuesTransactions,
+      unpaidDues,
+      personalExpenses,
+      sharedExpensePerMember,
+      totalExpenses,
+      finalBalance,
+      totalBill
+    };
   }, [member.id, allTransactions, cashierDays, duesPerMeeting, totalMembers]);
 
   return (
     <div className="space-y-6">
       <div className="text-center">
-        <h1 className="text-3xl font-bold font-headline">Laporan Kas, {member.name}</h1>
-        <p className="text-muted-foreground">Berikut adalah rincian status keuangan Anda di kas kelas.</p>
+        <h1 className="text-4xl font-bold font-headline">{member.name}</h1>
+        <p className="text-muted-foreground text-lg">Ringkasan Keuangan Personal</p>
       </div>
-      
-      {/* Kartu Ringkasan Utama */}
+
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Kas Masuk (Pembayaran Anda)</CardTitle>
-            <Banknote className="h-5 w-5 text-green-500" />
+          <CardHeader>
+            <CardTitle>Total Kas Masuk</CardTitle>
+            <CardDescription>Total uang yang telah Anda setorkan.</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{formatCurrency(totalPaid)}</div>
-            <p className="text-xs text-muted-foreground">Total uang yang telah Anda setorkan.</p>
+            <p className="text-3xl font-bold text-green-600">{formatCurrency(totalPaid)}</p>
           </CardContent>
         </Card>
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Tagihan</CardTitle>
-            <FileWarning className="h-5 w-5 text-yellow-500" />
+          <CardHeader>
+            <CardTitle>Total Tagihan</CardTitle>
+            <CardDescription>Total iuran wajib & beban pengeluaran.</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{formatCurrency(totalBill)}</div>
-            <p className="text-xs text-muted-foreground">Total iuran wajib ditambah beban pengeluaran.</p>
+            <p className="text-3xl font-bold">{formatCurrency(totalBill)}</p>
+             <p className="text-xs text-muted-foreground mt-1">
+                Iuran: {formatCurrency(totalDues)} + Beban: {formatCurrency(totalExpenses)}
+            </p>
           </CardContent>
         </Card>
-        <Card className={finalBalance >= 0 ? "border-green-500" : "border-destructive"}>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-                {finalBalance >= 0 ? 'Sisa Saldo Anda' : 'Total Tunggakan'}
-            </CardTitle>
-            <Scale className="h-5 w-5 text-muted-foreground" />
+        <Card>
+          <CardHeader>
+            <CardTitle>Sisa Saldo</CardTitle>
+             <CardDescription>
+              {finalBalance >= 0 ? "Sisa dana setelah dikurangi pengeluaran." : "Tunggakan yang perlu Anda lunasi."}
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className={`text-3xl font-bold ${finalBalance >= 0 ? 'text-green-600' : 'text-destructive'}`}>
-                {formatCurrency(finalBalance)}
-            </div>
-            <p className="text-xs text-muted-foreground">
-                {finalBalance >= 0 ? 'Sisa kas setelah dikurangi semua tagihan.' : 'Kekurangan yang perlu dilunasi.'}
+            <p className={`text-3xl font-bold ${finalBalance >= 0 ? 'text-blue-600' : 'text-destructive'}`}>
+              {formatCurrency(finalBalance)}
             </p>
           </CardContent>
         </Card>
       </div>
-      
-      {/* Rincian Perhitungan */}
-      <Card>
-          <CardHeader>
-              <CardTitle>Rincian Perhitungan</CardTitle>
-              <CardDescription>Detail dari mana angka-angka di atas berasal.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-                {/* Rincian Tagihan */}
-                <div className="p-4 rounded-lg bg-gray-50 dark:bg-gray-900">
-                    <h3 className="font-bold text-lg mb-2 flex items-center"><Coins className="mr-2 h-5 w-5 text-yellow-500"/> Rincian Tagihan</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <p className="font-semibold">Total Iuran Wajib</p>
-                            <p className="text-xl font-bold">{formatCurrency(totalDues)}</p>
-                            <p className="text-xs text-muted-foreground">{cashierDays.length} pertemuan x {formatCurrency(duesPerMeeting)}</p>
-                        </div>
-                        <div>
-                            <p className="font-semibold">Total Beban Pengeluaran</p>
-                            <p className="text-xl font-bold">{formatCurrency(totalExpenses)}</p>
-                            <p className="text-xs text-muted-foreground">Pribadi ({formatCurrency(personalExpensesDetails.reduce((a,b)=>a+b.amount, 0))}) + Bersama ({formatCurrency(sharedExpensePerMember)})</p>
-                        </div>
-                    </div>
-                </div>
 
-                {/* Rincian Pembayaran & Iuran */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <DetailsList 
-                        title="Iuran Wajib Sudah Dibayar"
-                        amount={paidDuesDetails.length * duesPerMeeting}
-                        items={paidDuesDetails}
-                    />
-                    <DetailsList 
-                        title="Iuran Wajib Belum Dibayar"
-                        amount={unpaidDuesDetails.length * duesPerMeeting}
-                        items={unpaidDuesDetails}
-                    />
+       <Card>
+        <CardHeader>
+          <CardTitle>Detail Transaksi</CardTitle>
+          <CardDescription>Rincian lengkap dari semua transaksi dan kewajiban Anda.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Accordion type="multiple" defaultValue={['item-1', 'item-2', 'item-3']} className="w-full space-y-4">
+            
+            {/* Paid Dues Section */}
+            <AccordionItem value="item-1">
+                <AccordionTrigger className="text-lg font-semibold bg-green-50 px-4 rounded-md">
+                    Iuran Wajib Lunas ({formatCurrency(paidDuesTransactions.reduce((sum, t) => sum + t.amount, 0))})
+                </AccordionTrigger>
+                <AccordionContent>
+                   <div className="p-4 border rounded-b-md">
+                     <TransactionList 
+                       title=""
+                       transactions={paidDuesTransactions.map(t => ({ description: t.description, amount: t.amount, date: t.date }))}
+                       totalAmount={0} // total is in the trigger
+                       emptyText="Belum ada iuran yang dibayar."
+                     />
+                   </div>
+                </AccordionContent>
+            </AccordionItem>
+
+            {/* Unpaid Dues Section */}
+            <AccordionItem value="item-2">
+                <AccordionTrigger className="text-lg font-semibold bg-red-50 px-4 rounded-md">
+                    Tunggakan Iuran Wajib ({formatCurrency(unpaidDues.length * duesPerMeeting)})
+                </AccordionTrigger>
+                <AccordionContent>
+                   <div className="p-4 border rounded-b-md">
+                      {unpaidDues.length > 0 ? (
+                         <ul className="space-y-2">
+                           {unpaidDues.map(day => (
+                             <li key={day.id} className="flex justify-between items-center p-2 rounded-md bg-red-50">
+                               <div>
+                                 <p className="text-sm font-medium">{day.description}</p>
+                                 <p className="text-xs text-muted-foreground">{formatDate(day.date)}</p>
+                               </div>
+                               <span className="text-sm font-semibold text-destructive">{formatCurrency(duesPerMeeting)}</span>
+                             </li>
+                           ))}
+                         </ul>
+                       ) : (
+                         <p className="text-sm text-muted-foreground">Tidak ada tunggakan iuran.</p>
+                       )}
+                   </div>
+                </AccordionContent>
+            </AccordionItem>
+
+            {/* Expenses Section */}
+            <AccordionItem value="item-3">
+              <AccordionTrigger className="text-lg font-semibold bg-orange-50 px-4 rounded-md">
+                Beban Pengeluaran ({formatCurrency(totalExpenses)})
+              </AccordionTrigger>
+              <AccordionContent>
+                <div className="p-4 border rounded-b-md space-y-4">
+                  <div className="flex justify-between items-center text-sm">
+                    <p>Pengeluaran Pribadi:</p>
+                    <span className="font-semibold">{formatCurrency(personalExpenses.reduce((s, t) => s + t.amount, 0))}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-sm">
+                    <p>Pengeluaran Bersama (Bagian Anda):</p>
+                    <span className="font-semibold">{formatCurrency(sharedExpensePerMember)}</span>
+                  </div>
+                  <hr className="my-2"/>
+                   <TransactionList 
+                       title="Rincian Pengeluaran Pribadi"
+                       transactions={personalExpenses.map(t => ({ description: t.description, amount: t.amount, date: t.date }))}
+                       totalAmount={0}
+                       emptyText="Tidak ada pengeluaran pribadi."
+                     />
                 </div>
-                 {/* Rincian Pengeluaran Pribadi */}
-                <DetailsList
-                    title="Rincian Beban Pengeluaran Pribadi"
-                    amount={personalExpensesDetails.reduce((a, b) => a + b.amount, 0)}
-                    items={personalExpensesDetails}
-                />
-          </CardContent>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
+        </CardContent>
       </Card>
     </div>
   );
