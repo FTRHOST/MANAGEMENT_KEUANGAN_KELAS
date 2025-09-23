@@ -51,11 +51,13 @@ import { useToast } from '@/hooks/use-toast';
 import { addCashierDay, deleteCashierDay } from '@/lib/actions';
 import type { CashierDay } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { PlusCircle, Trash2, Loader2, CalendarIcon, FileDown } from 'lucide-react';
+import { PlusCircle, Trash2, Loader2, CalendarIcon, FileDown, ClipboardCopy } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { exportToXLSX } from '@/lib/export';
 import { Checkbox } from '@/components/ui/checkbox';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+
 
 const cashierDaySchema = z.object({
   date: z.date({ required_error: 'Tanggal wajib diisi.' }),
@@ -150,7 +152,6 @@ export default function CashierDayManager({ initialCashierDays }: CashierDayMana
     }
   };
 
-
   const handleExport = () => {
     const dataToExport = cashierDays.map(day => ({
         Tanggal: format(new Date(day.date), 'PPP', { locale: id }),
@@ -160,11 +161,31 @@ export default function CashierDayManager({ initialCashierDays }: CashierDayMana
     exportToXLSX(dataToExport, 'Daftar_Hari_Kas', 'Hari Kas');
   };
 
+  const handleCopyInfo = (day: CashierDay) => {
+    const dayName = format(new Date(day.date), 'EEEE', { locale: id });
+    const formattedAmount = formatCurrency(day.duesAmount || 0);
+    const textToCopy = `*✨ INFO KAS MINGGUAN ✨*
+Halo semua, sekadar mengingatkan untuk iuran kas hari ini ya!
+
+🗓️ Hari: *${dayName}*
+💰 Nominal: *${formattedAmount},-*
+💻 Transparansi: kasati25.vercel.app (input nama/NIM)
+
+Terima kasih atas perhatiannya! 🙏`;
+
+    navigator.clipboard.writeText(textToCopy).then(() => {
+        toast({ title: 'Teks disalin!', description: 'Informasi kas berhasil disalin ke clipboard.' });
+    }).catch(err => {
+        toast({ variant: 'destructive', title: 'Gagal menyalin', description: 'Tidak dapat menyalin teks ke clipboard.' });
+        console.error('Failed to copy text: ', err);
+    });
+  };
+
   return (
     <Card>
       <CardHeader>
         <CardTitle>Manajemen Hari Kas</CardTitle>
-        <CardDescription>Tambah atau hapus tanggal pengumpulan iuran kas beserta nominalnya.</CardDescription>
+        <CardDescription>Tambah, hapus, dan salin pengingat iuran kas beserta nominalnya.</CardDescription>
       </CardHeader>
       <CardContent>
         <div className="flex justify-between items-center mb-4">
@@ -232,7 +253,20 @@ export default function CashierDayManager({ initialCashierDays }: CashierDayMana
                   <TableCell>{format(new Date(day.date), 'PPP', { locale: id })}</TableCell>
                   <TableCell className="font-medium">{day.description}</TableCell>
                   <TableCell>{formatCurrency(day.duesAmount || 0)}</TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="text-right space-x-1">
+                    <TooltipProvider>
+                       <Tooltip>
+                         <TooltipTrigger asChild>
+                           <Button variant="ghost" size="icon" onClick={() => handleCopyInfo(day)}>
+                             <ClipboardCopy className="h-4 w-4" />
+                           </Button>
+                         </TooltipTrigger>
+                         <TooltipContent>
+                           <p>Salin Info Kas</p>
+                         </TooltipContent>
+                       </Tooltip>
+                    </TooltipProvider>
+
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
                         <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive">
@@ -375,3 +409,5 @@ export default function CashierDayManager({ initialCashierDays }: CashierDayMana
     </Card>
   );
 }
+
+    
