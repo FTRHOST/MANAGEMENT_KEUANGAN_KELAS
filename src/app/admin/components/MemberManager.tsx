@@ -159,7 +159,7 @@ export default function MemberManager({ initialMembers, transactions, cashierDay
   };
 
   const memberBalances = useMemo(() => {
-    const balances = new Map<string, { finalBalance: number, status: string }>();
+    const balances = new Map<string, { finalBalance: number; status: string }>();
     const totalMemberCount = members.length > 0 ? members.length : 1;
     const duesPerMeeting = settings.duesAmount || 0;
 
@@ -188,8 +188,8 @@ export default function MemberManager({ initialMembers, transactions, cashierDay
       const finalBalance = totalPaid - totalDues - totalExpenses;
       
       const status = finalBalance < 0 
-        ? `Tunggakan ${formatCurrency(Math.abs(finalBalance))}` 
-        : `Sisa Kas ${formatCurrency(finalBalance)}`;
+        ? `Tunggakan` 
+        : `Sisa Kas`;
 
       balances.set(member.id, { finalBalance, status });
     });
@@ -265,14 +265,16 @@ export default function MemberManager({ initialMembers, transactions, cashierDay
                     />
                 </TableHead>
                 <TableHead>Nama Anggota</TableHead>
-                <TableHead>Saldo Personal</TableHead>
+                <TableHead>Status Saldo</TableHead>
+                <TableHead>Jumlah</TableHead>
                 <TableHead className="text-right">Aksi</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {members.map((member) => {
                 const balanceInfo = memberBalances.get(member.id);
-                const balance = balanceInfo?.finalBalance ?? 0;
+                const finalBalance = balanceInfo?.finalBalance ?? 0;
+                const status = balanceInfo?.status ?? 'Sisa Kas';
                 const isSelected = selectedMembers.includes(member.id);
                 return (
                   <TableRow key={member.id} data-state={isSelected ? "selected" : ""}>
@@ -284,8 +286,11 @@ export default function MemberManager({ initialMembers, transactions, cashierDay
                         />
                     </TableCell>
                     <TableCell className="font-medium">{member.name}</TableCell>
-                    <TableCell className={balance >= 0 ? 'text-green-600' : 'text-destructive'}>
-                      {formatCurrency(balance)}
+                    <TableCell className={finalBalance >= 0 ? 'text-green-600' : 'text-destructive'}>
+                        {status}
+                    </TableCell>
+                    <TableCell className={finalBalance >= 0 ? 'text-green-600 font-semibold' : 'text-destructive font-semibold'}>
+                      {formatCurrency(finalBalance)}
                     </TableCell>
                     <TableCell className="text-right">
                       <TooltipProvider>
@@ -374,5 +379,7 @@ export default function MemberManager({ initialMembers, transactions, cashierDay
     </Card>
   );
 }
+
+    
 
     
