@@ -62,6 +62,7 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { exportToXLSX } from '@/lib/export';
+import { Checkbox } from '@/components/ui/checkbox';
 
 
 function formatCurrency(amount: number) {
@@ -113,6 +114,7 @@ export default function TransactionManager({ initialTransactions, members }: Tra
   const [isSubmitting, setSubmitting] = useState(false);
   const [isDialogOpen, setDialogOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+  const [selectedTransactions, setSelectedTransactions] = useState<string[]>([]);
   
   const form = useForm<z.infer<typeof transactionSchema>>({
     resolver: zodResolver(transactionSchema),
@@ -146,6 +148,7 @@ export default function TransactionManager({ initialTransactions, members }: Tra
         toast({ title: 'Sukses', description: 'Transaksi baru berhasil ditambahkan.' });
       }
       setDialogOpen(false);
+      // Revalidation will refresh the list
     } catch (error: any) {
       toast({ variant: 'destructive', title: 'Error', description: error.message });
     }
@@ -158,6 +161,29 @@ export default function TransactionManager({ initialTransactions, members }: Tra
     toast({ title: 'Sukses', description: 'Transaksi berhasil dihapus.' });
   };
   
+  const handleBulkDelete = async () => {
+    try {
+        await Promise.all(selectedTransactions.map(id => deleteTransaction(id)));
+        setTransactions(transactions.filter(t => !selectedTransactions.includes(t.id)));
+        toast({ title: 'Sukses', description: `${selectedTransactions.length} transaksi berhasil dihapus.` });
+        setSelectedTransactions([]);
+    } catch (error) {
+        toast({ variant: 'destructive', title: 'Error', description: 'Gagal menghapus transaksi yang dipilih.' });
+    }
+  };
+
+  const toggleSelectTransaction = (id: string) => {
+    setSelectedTransactions(prev => prev.includes(id) ? prev.filter(tId => tId !== id) : [...prev, id]);
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedTransactions.length === transactions.length) {
+        setSelectedTransactions([]);
+    } else {
+        setSelectedTransactions(transactions.map(t => t.id));
+    }
+  };
+
   const handleExport = () => {
     const dataToExport = transactions.map(t => ({
         Tanggal: formatDate(t.date),
@@ -181,14 +207,46 @@ export default function TransactionManager({ initialTransactions, members }: Tra
           <Button variant="outline" onClick={handleExport}>
             <FileDown className="mr-2 h-4 w-4" /> Ekspor ke XLSX
           </Button>
-          <Button onClick={() => handleDialogOpen(null)}>
-            <PlusCircle className="mr-2 h-4 w-4" /> Tambah Transaksi
-          </Button>
+          <div className="flex items-center gap-2">
+            {selectedTransactions.length > 0 && (
+                <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                       <Button variant="destructive">
+                         <Trash2 className="mr-2 h-4 w-4" /> Hapus ({selectedTransactions.length})
+                       </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Anda yakin?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                        Tindakan ini akan menghapus {selectedTransactions.length} transaksi yang dipilih secara permanen.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Batal</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleBulkDelete}>
+                        Hapus
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
+            )}
+            <Button onClick={() => handleDialogOpen(null)}>
+              <PlusCircle className="mr-2 h-4 w-4" /> Tambah Transaksi
+            </Button>
+          </div>
         </div>
         <div className="rounded-md border">
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-12">
+                   <Checkbox
+                        checked={selectedTransactions.length === transactions.length && transactions.length > 0}
+                        onCheckedChange={toggleSelectAll}
+                        aria-label="Pilih semua"
+                    />
+                </TableHead>
                 <TableHead>Tanggal</TableHead>
                 <TableHead>Tipe</TableHead>
                 <TableHead>Nama/Deskripsi</TableHead>
@@ -198,8 +256,17 @@ export default function TransactionManager({ initialTransactions, members }: Tra
               </TableRow>
             </TableHeader>
             <TableBody>
-              {transactions.map((transaction) => (
-                <TableRow key={transaction.id}>
+              {transactions.map((transaction) => {
+                const isSelected = selectedTransactions.includes(transaction.id);
+                return (
+                <TableRow key={transaction.id} data-state={isSelected ? "selected" : ""}>
+                   <TableCell>
+                         <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={() => toggleSelectTransaction(transaction.id)}
+                            aria-label={`Pilih transaksi ${transaction.description}`}
+                        />
+                    </TableCell>
                   <TableCell>{formatDate(transaction.date)}</TableCell>
                   <TableCell>
                     <Badge variant={transaction.type === 'Pemasukan' ? 'default' : 'destructive'} className={`${transaction.type === 'Pemasukan' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
@@ -253,7 +320,7 @@ export default function TransactionManager({ initialTransactions, members }: Tra
                     </AlertDialog>
                   </TableCell>
                 </TableRow>
-              ))}
+              )})}
             </TableBody>
           </Table>
         </div>

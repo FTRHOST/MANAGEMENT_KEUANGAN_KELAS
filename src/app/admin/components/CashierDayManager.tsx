@@ -54,6 +54,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { PlusCircle, Trash2, Loader2, CalendarIcon, FileDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { exportToXLSX } from '@/lib/export';
+import { Checkbox } from '@/components/ui/checkbox';
 
 
 const cashierDaySchema = z.object({
@@ -70,6 +71,7 @@ export default function CashierDayManager({ initialCashierDays }: CashierDayMana
   const [cashierDays, setCashierDays] = useState(initialCashierDays);
   const [isSubmitting, setSubmitting] = useState(false);
   const [isDialogOpen, setDialogOpen] = useState(false);
+  const [selectedDays, setSelectedDays] = useState<string[]>([]);
 
   const form = useForm<z.infer<typeof cashierDaySchema>>({
     resolver: zodResolver(cashierDaySchema),
@@ -100,6 +102,30 @@ export default function CashierDayManager({ initialCashierDays }: CashierDayMana
     }
   };
 
+  const handleBulkDelete = async () => {
+    try {
+        await Promise.all(selectedDays.map(id => deleteCashierDay(id)));
+        setCashierDays(cashierDays.filter(day => !selectedDays.includes(day.id)));
+        toast({ title: 'Sukses', description: `${selectedDays.length} hari kas berhasil dihapus.` });
+        setSelectedDays([]);
+    } catch (error) {
+        toast({ variant: 'destructive', title: 'Error', description: 'Gagal menghapus hari kas yang dipilih.' });
+    }
+  };
+
+  const toggleSelectDay = (id: string) => {
+    setSelectedDays(prev => prev.includes(id) ? prev.filter(dayId => dayId !== id) : [...prev, id]);
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedDays.length === cashierDays.length) {
+        setSelectedDays([]);
+    } else {
+        setSelectedDays(cashierDays.map(d => d.id));
+    }
+  };
+
+
   const handleExport = () => {
     const dataToExport = cashierDays.map(day => ({
         Tanggal: format(new Date(day.date), 'PPP', { locale: id }),
@@ -119,22 +145,63 @@ export default function CashierDayManager({ initialCashierDays }: CashierDayMana
            <Button variant="outline" onClick={handleExport}>
             <FileDown className="mr-2 h-4 w-4" /> Ekspor ke XLSX
           </Button>
-          <Button onClick={() => setDialogOpen(true)}>
-            <PlusCircle className="mr-2 h-4 w-4" /> Tambah Hari Kas
-          </Button>
+          <div className="flex items-center gap-2">
+             {selectedDays.length > 0 && (
+                 <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                       <Button variant="destructive">
+                         <Trash2 className="mr-2 h-4 w-4" /> Hapus ({selectedDays.length})
+                       </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Anda yakin?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                        Tindakan ini akan menghapus {selectedDays.length} hari kas yang dipilih secara permanen.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Batal</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleBulkDelete}>
+                        Hapus
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
+            )}
+            <Button onClick={() => setDialogOpen(true)}>
+              <PlusCircle className="mr-2 h-4 w-4" /> Tambah Hari Kas
+            </Button>
+          </div>
         </div>
         <div className="rounded-md border">
           <Table>
             <TableHeader>
               <TableRow>
+                 <TableHead className="w-12">
+                   <Checkbox
+                        checked={selectedDays.length === cashierDays.length && cashierDays.length > 0}
+                        onCheckedChange={toggleSelectAll}
+                        aria-label="Pilih semua"
+                    />
+                </TableHead>
                 <TableHead>Tanggal</TableHead>
                 <TableHead>Deskripsi</TableHead>
                 <TableHead className="text-right">Aksi</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {cashierDays.map((day) => (
-                <TableRow key={day.id}>
+              {cashierDays.map((day) => {
+                const isSelected = selectedDays.includes(day.id);
+                return (
+                <TableRow key={day.id} data-state={isSelected ? "selected" : ""}>
+                   <TableCell>
+                         <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={() => toggleSelectDay(day.id)}
+                            aria-label={`Pilih ${day.description}`}
+                        />
+                    </TableCell>
                   <TableCell>{format(new Date(day.date), 'PPP', { locale: id })}</TableCell>
                   <TableCell className="font-medium">{day.description}</TableCell>
                   <TableCell className="text-right">
@@ -161,7 +228,7 @@ export default function CashierDayManager({ initialCashierDays }: CashierDayMana
                     </AlertDialog>
                   </TableCell>
                 </TableRow>
-              ))}
+              )})}
             </TableBody>
           </Table>
         </div>

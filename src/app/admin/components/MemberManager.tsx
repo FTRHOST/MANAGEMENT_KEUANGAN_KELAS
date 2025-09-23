@@ -50,6 +50,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { PlusCircle, Edit, Trash2, Loader2, Ban, FileDown } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { exportToXLSX } from '@/lib/export';
+import { Checkbox } from '@/components/ui/checkbox';
 
 const memberSchema = z.object({
   name: z.string().min(3, 'Nama minimal 3 karakter'),
@@ -76,6 +77,7 @@ export default function MemberManager({ initialMembers, transactions, cashierDay
   const [isSubmitting, setSubmitting] = useState(false);
   const [isDialogOpen, setDialogOpen] = useState(false);
   const [editingMember, setEditingMember] = useState<Member | null>(null);
+  const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
 
   const form = useForm<z.infer<typeof memberSchema>>({
     resolver: zodResolver(memberSchema),
@@ -118,6 +120,41 @@ export default function MemberManager({ initialMembers, transactions, cashierDay
     } else {
       setMembers(members.filter(m => m.id !== id));
       toast({ title: 'Sukses', description: 'Anggota berhasil dihapus.' });
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    const membersToDelete = selectedMembers.filter(id => !memberHasTransactions(id));
+    const membersWithTransactions = selectedMembers.length - membersToDelete.length;
+
+    if (membersToDelete.length === 0) {
+        toast({ variant: 'destructive', title: 'Gagal', description: 'Semua anggota yang dipilih memiliki riwayat transaksi dan tidak dapat dihapus.' });
+        return;
+    }
+
+    try {
+        await Promise.all(membersToDelete.map(id => deleteMember(id)));
+        setMembers(members.filter(m => !membersToDelete.includes(m.id)));
+        setSelectedMembers([]);
+        let description = `${membersToDelete.length} anggota berhasil dihapus.`;
+        if (membersWithTransactions > 0) {
+            description += ` ${membersWithTransactions} anggota tidak dapat dihapus karena memiliki transaksi.`
+        }
+        toast({ title: 'Sukses', description });
+    } catch (error: any) {
+        toast({ variant: 'destructive', title: 'Error', description: 'Gagal menghapus anggota yang dipilih.' });
+    }
+  };
+
+  const toggleSelectMember = (id: string) => {
+    setSelectedMembers(prev => prev.includes(id) ? prev.filter(mId => mId !== id) : [...prev, id]);
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedMembers.length === members.length) {
+        setSelectedMembers([]);
+    } else {
+        setSelectedMembers(members.map(m => m.id));
     }
   };
 
@@ -179,14 +216,46 @@ export default function MemberManager({ initialMembers, transactions, cashierDay
            <Button variant="outline" onClick={handleExport}>
             <FileDown className="mr-2 h-4 w-4" /> Ekspor ke XLSX
           </Button>
-          <Button onClick={() => handleDialogOpen(null)}>
-            <PlusCircle className="mr-2 h-4 w-4" /> Tambah Anggota
-          </Button>
+          <div className="flex items-center gap-2">
+            {selectedMembers.length > 0 && (
+                 <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                       <Button variant="destructive">
+                         <Trash2 className="mr-2 h-4 w-4" /> Hapus ({selectedMembers.length})
+                       </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Anda yakin?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                        Tindakan ini akan menghapus {selectedMembers.length} anggota yang dipilih secara permanen. Anggota yang memiliki riwayat transaksi tidak akan dihapus.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Batal</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleBulkDelete}>
+                        Hapus
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
+            )}
+            <Button onClick={() => handleDialogOpen(null)}>
+                <PlusCircle className="mr-2 h-4 w-4" /> Tambah Anggota
+            </Button>
+          </div>
         </div>
         <div className="rounded-md border">
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead padding="checkbox" className="w-12">
+                   <Checkbox
+                        checked={selectedMembers.length === members.length && members.length > 0}
+                        onCheckedChange={toggleSelectAll}
+                        aria-label="Pilih semua"
+                    />
+                </TableHead>
                 <TableHead>Nama Anggota</TableHead>
                 <TableHead>Saldo Personal</TableHead>
                 <TableHead className="text-right">Aksi</TableHead>
@@ -195,8 +264,16 @@ export default function MemberManager({ initialMembers, transactions, cashierDay
             <TableBody>
               {members.map((member) => {
                 const balance = memberBalances.get(member.id) ?? 0;
+                const isSelected = selectedMembers.includes(member.id);
                 return (
-                  <TableRow key={member.id}>
+                  <TableRow key={member.id} data-state={isSelected ? "selected" : ""}>
+                    <TableCell>
+                         <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={() => toggleSelectMember(member.id)}
+                            aria-label={`Pilih ${member.name}`}
+                        />
+                    </TableCell>
                     <TableCell className="font-medium">{member.name}</TableCell>
                     <TableCell className={balance >= 0 ? 'text-green-600' : 'text-destructive'}>
                       {formatCurrency(balance)}
