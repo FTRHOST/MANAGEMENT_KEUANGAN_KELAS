@@ -123,26 +123,30 @@ export default function MemberManager({ initialMembers, transactions, cashierDay
 
   const memberBalances = useMemo(() => {
     const balances = new Map<string, number>();
-    const totalMembers = members.length > 0 ? members.length : 1;
+    const totalMemberCount = members.length > 0 ? members.length : 1;
 
-    const duesPerMeeting = settings.duesAmount || 0;
-    const totalDues = cashierDays.length * duesPerMeeting;
-
-    const sharedExpenses = transactions
+    // Hitung total pengeluaran bersama
+    const sharedExpensesTotal = transactions
       .filter((t) => t.type === 'Pengeluaran' && !t.memberId)
       .reduce((sum, t) => sum + t.amount, 0);
-
-    const sharedExpensePerMember = sharedExpenses / totalMembers;
+    const sharedExpensePerMember = sharedExpensesTotal / totalMemberCount;
 
     members.forEach(member => {
+      // Total Iuran Wajib
+      const duesPerMeeting = settings.duesAmount || 0;
+      const totalDues = cashierDays.length * duesPerMeeting;
+
+      // Total Pembayaran
       const totalPaid = transactions
         .filter(t => t.type === 'Pemasukan' && t.memberId === member.id)
         .reduce((sum, t) => sum + t.amount, 0);
 
+      // Total Pengeluaran Pribadi
       const personalExpenses = transactions
         .filter(t => t.type === 'Pengeluaran' && t.memberId === member.id)
         .reduce((sum, t) => sum + t.amount, 0);
 
+      // Hitung Saldo Akhir
       const balance = totalPaid - totalDues - personalExpenses - sharedExpensePerMember;
       balances.set(member.id, balance);
     });
