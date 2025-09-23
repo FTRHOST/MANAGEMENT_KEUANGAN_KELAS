@@ -106,9 +106,10 @@ const transactionSchema = z.object({
 type TransactionManagerProps = {
   initialTransactions: Transaction[];
   members: Member[];
+  isReadOnly: boolean;
 };
 
-export default function TransactionManager({ initialTransactions, members }: TransactionManagerProps) {
+export default function TransactionManager({ initialTransactions, members, isReadOnly }: TransactionManagerProps) {
   const { toast } = useToast();
   const [transactions, setTransactions] = useState(initialTransactions);
   const [isSubmitting, setSubmitting] = useState(false);
@@ -124,6 +125,7 @@ export default function TransactionManager({ initialTransactions, members }: Tra
   const transactionType = form.watch('type');
 
   const handleDialogOpen = (transaction: Transaction | null) => {
+    if (isReadOnly) return;
     setEditingTransaction(transaction);
     if (transaction) {
       form.reset({
@@ -207,34 +209,36 @@ export default function TransactionManager({ initialTransactions, members }: Tra
           <Button variant="outline" onClick={handleExport}>
             <FileDown className="mr-2 h-4 w-4" /> Ekspor ke XLSX
           </Button>
-          <div className="flex items-center gap-2">
-            {selectedTransactions.length > 0 && (
-                <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                       <Button variant="destructive">
-                         <Trash2 className="mr-2 h-4 w-4" /> Hapus ({selectedTransactions.length})
-                       </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>Anda yakin?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                        Tindakan ini akan menghapus {selectedTransactions.length} transaksi yang dipilih secara permanen.
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel>Batal</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleBulkDelete}>
-                        Hapus
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                    </AlertDialogContent>
-                </AlertDialog>
-            )}
-            <Button onClick={() => handleDialogOpen(null)}>
-              <PlusCircle className="mr-2 h-4 w-4" /> Tambah Transaksi
-            </Button>
-          </div>
+          {!isReadOnly && (
+            <div className="flex items-center gap-2">
+              {selectedTransactions.length > 0 && (
+                  <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                         <Button variant="destructive">
+                           <Trash2 className="mr-2 h-4 w-4" /> Hapus ({selectedTransactions.length})
+                         </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                      <AlertDialogHeader>
+                          <AlertDialogTitle>Anda yakin?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                          Tindakan ini akan menghapus {selectedTransactions.length} transaksi yang dipilih secara permanen.
+                          </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                          <AlertDialogCancel>Batal</AlertDialogCancel>
+                          <AlertDialogAction onClick={handleBulkDelete}>
+                          Hapus
+                          </AlertDialogAction>
+                      </AlertDialogFooter>
+                      </AlertDialogContent>
+                  </AlertDialog>
+              )}
+              <Button onClick={() => handleDialogOpen(null)}>
+                <PlusCircle className="mr-2 h-4 w-4" /> Tambah Transaksi
+              </Button>
+            </div>
+          )}
         </div>
         <div className="rounded-md border">
           <Table>
@@ -245,6 +249,7 @@ export default function TransactionManager({ initialTransactions, members }: Tra
                         checked={selectedTransactions.length === transactions.length && transactions.length > 0}
                         onCheckedChange={toggleSelectAll}
                         aria-label="Pilih semua"
+                        disabled={isReadOnly}
                     />
                 </TableHead>
                 <TableHead>Tanggal</TableHead>
@@ -252,7 +257,7 @@ export default function TransactionManager({ initialTransactions, members }: Tra
                 <TableHead>Nama/Deskripsi</TableHead>
                 <TableHead>Bendahara</TableHead>
                 <TableHead className="text-right">Jumlah</TableHead>
-                <TableHead className="text-right">Aksi</TableHead>
+                {!isReadOnly && <TableHead className="text-right">Aksi</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -265,6 +270,7 @@ export default function TransactionManager({ initialTransactions, members }: Tra
                             checked={isSelected}
                             onCheckedChange={() => toggleSelectTransaction(transaction.id)}
                             aria-label={`Pilih transaksi ${transaction.description}`}
+                            disabled={isReadOnly}
                         />
                     </TableCell>
                   <TableCell>{formatDate(transaction.date)}</TableCell>
@@ -293,32 +299,34 @@ export default function TransactionManager({ initialTransactions, members }: Tra
                   <TableCell className={`text-right font-semibold ${transaction.type === 'Pemasukan' ? 'text-green-600' : 'text-destructive'}`}>
                     {transaction.type === 'Pemasukan' ? '+' : '-'} {formatCurrency(transaction.amount)}
                   </TableCell>
-                  <TableCell className="text-right">
-                    <Button variant="ghost" size="icon" onClick={() => handleDialogOpen(transaction)}>
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive">
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Anda yakin?</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            Tindakan ini tidak dapat dibatalkan. Ini akan menghapus data transaksi secara permanen.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Batal</AlertDialogCancel>
-                          <AlertDialogAction onClick={() => handleDelete(transaction.id)}>
-                            Hapus
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </TableCell>
+                  {!isReadOnly && (
+                    <TableCell className="text-right">
+                      <Button variant="ghost" size="icon" onClick={() => handleDialogOpen(transaction)}>
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive">
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Anda yakin?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Tindakan ini tidak dapat dibatalkan. Ini akan menghapus data transaksi secara permanen.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Batal</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => handleDelete(transaction.id)}>
+                              Hapus
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </TableCell>
+                  )}
                 </TableRow>
               )})}
             </TableBody>

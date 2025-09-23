@@ -4,6 +4,7 @@ import type { Member, Transaction, CashierDay, Settings } from '@/lib/types';
 import AdminTabs from './components/AdminTabs';
 import { getCashierDays, getSettings } from '@/lib/actions';
 import { collection, getDoc, doc } from 'firebase/firestore';
+import { cookies } from 'next/headers';
 
 
 async function getAdminData() {
@@ -30,14 +31,28 @@ async function getAdminData() {
 
 export default async function AdminPage() {
     const { members, transactions, cashierDays, settings } = await getAdminData();
+    const cookieStore = cookies();
+    const role = cookieStore.get('session_role')?.value ?? 'readonly';
+    const isReadOnly = role === 'readonly';
   
     return (
         <div className="space-y-6">
             <div>
                 <h1 className="text-3xl font-bold font-headline">Panel Admin</h1>
-                <p className="text-muted-foreground">Kelola keuangan dan anggota kelas di sini.</p>
+                <p className="text-muted-foreground">
+                  {isReadOnly 
+                    ? 'Anda masuk dalam mode read-only. Semua fitur modifikasi dinonaktifkan.' 
+                    : 'Kelola keuangan dan anggota kelas di sini.'
+                  }
+                </p>
             </div>
-            <AdminTabs members={members} transactions={transactions} cashierDays={cashierDays} settings={settings} />
+            <AdminTabs 
+              members={members} 
+              transactions={transactions} 
+              cashierDays={cashierDays} 
+              settings={settings} 
+              isReadOnly={isReadOnly}
+            />
         </div>
     );
 }

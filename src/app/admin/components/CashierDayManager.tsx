@@ -84,9 +84,10 @@ function formatCurrency(amount: number) {
 
 type CashierDayManagerProps = {
   initialCashierDays: CashierDay[];
+  isReadOnly: boolean;
 };
 
-export default function CashierDayManager({ initialCashierDays }: CashierDayManagerProps) {
+export default function CashierDayManager({ initialCashierDays, isReadOnly }: CashierDayManagerProps) {
   const { toast } = useToast();
   const [cashierDays, setCashierDays] = useState(initialCashierDays);
   const [isSubmitting, setSubmitting] = useState(false);
@@ -99,6 +100,11 @@ export default function CashierDayManager({ initialCashierDays }: CashierDayMana
   });
 
   const duesAmountOption = form.watch('duesAmountOption');
+  
+  const handleDialogOpen = () => {
+    if (isReadOnly) return;
+    setDialogOpen(true);
+  };
 
   const onSubmit = async (values: z.infer<typeof cashierDaySchema>) => {
     setSubmitting(true);
@@ -192,34 +198,36 @@ Terima kasih atas perhatiannya! 🙏`;
            <Button variant="outline" onClick={handleExport}>
             <FileDown className="mr-2 h-4 w-4" /> Ekspor ke XLSX
           </Button>
-          <div className="flex items-center gap-2">
-             {selectedDays.length > 0 && (
-                 <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                       <Button variant="destructive">
-                         <Trash2 className="mr-2 h-4 w-4" /> Hapus ({selectedDays.length})
-                       </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>Anda yakin?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                        Tindakan ini akan menghapus {selectedDays.length} hari kas yang dipilih secara permanen.
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel>Batal</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleBulkDelete}>
-                        Hapus
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                    </AlertDialogContent>
-                </AlertDialog>
-            )}
-            <Button onClick={() => setDialogOpen(true)}>
-              <PlusCircle className="mr-2 h-4 w-4" /> Tambah Hari Kas
-            </Button>
-          </div>
+          {!isReadOnly && (
+            <div className="flex items-center gap-2">
+               {selectedDays.length > 0 && (
+                   <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                         <Button variant="destructive">
+                           <Trash2 className="mr-2 h-4 w-4" /> Hapus ({selectedDays.length})
+                         </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                      <AlertDialogHeader>
+                          <AlertDialogTitle>Anda yakin?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                          Tindakan ini akan menghapus {selectedDays.length} hari kas yang dipilih secara permanen.
+                          </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                          <AlertDialogCancel>Batal</AlertDialogCancel>
+                          <AlertDialogAction onClick={handleBulkDelete}>
+                          Hapus
+                          </AlertDialogAction>
+                      </AlertDialogFooter>
+                      </AlertDialogContent>
+                  </AlertDialog>
+              )}
+              <Button onClick={handleDialogOpen}>
+                <PlusCircle className="mr-2 h-4 w-4" /> Tambah Hari Kas
+              </Button>
+            </div>
+          )}
         </div>
         <div className="rounded-md border">
           <Table>
@@ -230,6 +238,7 @@ Terima kasih atas perhatiannya! 🙏`;
                         checked={selectedDays.length === cashierDays.length && cashierDays.length > 0}
                         onCheckedChange={toggleSelectAll}
                         aria-label="Pilih semua"
+                        disabled={isReadOnly}
                     />
                 </TableHead>
                 <TableHead>Tanggal</TableHead>
@@ -248,6 +257,7 @@ Terima kasih atas perhatiannya! 🙏`;
                             checked={isSelected}
                             onCheckedChange={() => toggleSelectDay(day.id)}
                             aria-label={`Pilih ${day.description}`}
+                            disabled={isReadOnly}
                         />
                     </TableCell>
                   <TableCell>{format(new Date(day.date), 'PPP', { locale: id })}</TableCell>
@@ -266,28 +276,30 @@ Terima kasih atas perhatiannya! 🙏`;
                          </TooltipContent>
                        </Tooltip>
                     </TooltipProvider>
-
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive">
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Anda yakin?</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            Tindakan ini tidak dapat dibatalkan. Ini akan menghapus data hari kas secara permanen.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Batal</AlertDialogCancel>
-                          <AlertDialogAction onClick={() => handleDelete(day.id)}>
-                            Hapus
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
+                    
+                    {!isReadOnly && (
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive">
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Anda yakin?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Tindakan ini tidak dapat dibatalkan. Ini akan menghapus data hari kas secara permanen.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Batal</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => handleDelete(day.id)}>
+                              Hapus
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    )}
                   </TableCell>
                 </TableRow>
               )})}

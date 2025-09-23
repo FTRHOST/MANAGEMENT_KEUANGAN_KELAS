@@ -11,9 +11,10 @@ type AdminTabsProps = {
   transactions: Transaction[];
   cashierDays: CashierDay[];
   settings: Settings;
+  isReadOnly: boolean;
 };
 
-export default function AdminTabs({ members, transactions, cashierDays, settings }: AdminTabsProps) {
+export default function AdminTabs({ members, transactions, cashierDays, settings, isReadOnly }: AdminTabsProps) {
   return (
     <Tabs defaultValue="dashboard" className="w-full">
       <TabsList className="grid w-full grid-cols-4">
@@ -26,13 +27,13 @@ export default function AdminTabs({ members, transactions, cashierDays, settings
         <Dashboard members={members} transactions={transactions} />
       </TabsContent>
       <TabsContent value="transactions">
-        <TransactionManager initialTransactions={transactions} members={members} />
+        <TransactionManager initialTransactions={transactions} members={members} isReadOnly={isReadOnly} />
       </TabsContent>
       <TabsContent value="members">
-        <MemberManager initialMembers={members} transactions={transactions} cashierDays={cashierDays} settings={settings}/>
+        <MemberManager initialMembers={members} transactions={transactions} cashierDays={cashierDays} settings={settings} isReadOnly={isReadOnly}/>
       </TabsContent>
       <TabsContent value="cashier-days">
-        <CashierDayManager initialCashierDays={cashierDays} />
+        <CashierDayManager initialCashierDays={cashierDays} isReadOnly={isReadOnly} />
       </TabsContent>
     </Tabs>
   );

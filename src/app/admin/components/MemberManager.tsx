@@ -61,6 +61,7 @@ type MemberManagerProps = {
   transactions: Transaction[];
   cashierDays: CashierDay[];
   settings: Settings;
+  isReadOnly: boolean;
 };
 
 function formatCurrency(amount: number) {
@@ -71,7 +72,7 @@ function formatCurrency(amount: number) {
   }).format(amount);
 }
 
-export default function MemberManager({ initialMembers, transactions, cashierDays, settings }: MemberManagerProps) {
+export default function MemberManager({ initialMembers, transactions, cashierDays, settings, isReadOnly }: MemberManagerProps) {
   const { toast } = useToast();
   const [members, setMembers] = useState(initialMembers);
   const [isSubmitting, setSubmitting] = useState(false);
@@ -89,6 +90,7 @@ export default function MemberManager({ initialMembers, transactions, cashierDay
   }
 
   const handleDialogOpen = (member: Member | null) => {
+    if (isReadOnly) return;
     setEditingMember(member);
     form.reset({ name: member ? member.name : '' });
     setDialogOpen(true);
@@ -214,34 +216,36 @@ export default function MemberManager({ initialMembers, transactions, cashierDay
            <Button variant="outline" onClick={handleExport}>
             <FileDown className="mr-2 h-4 w-4" /> Ekspor ke XLSX
           </Button>
-          <div className="flex items-center gap-2">
-            {selectedMembers.length > 0 && (
-                 <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                       <Button variant="destructive">
-                         <Trash2 className="mr-2 h-4 w-4" /> Hapus ({selectedMembers.length})
-                       </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>Anda yakin?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                        Tindakan ini akan menghapus {selectedMembers.length} anggota yang dipilih secara permanen. Anggota yang memiliki riwayat transaksi tidak akan dihapus.
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel>Batal</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleBulkDelete}>
-                        Hapus
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                    </AlertDialogContent>
-                </AlertDialog>
-            )}
-            <Button onClick={() => handleDialogOpen(null)}>
-                <PlusCircle className="mr-2 h-4 w-4" /> Tambah Anggota
-            </Button>
-          </div>
+          {!isReadOnly && (
+            <div className="flex items-center gap-2">
+              {selectedMembers.length > 0 && (
+                   <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                         <Button variant="destructive">
+                           <Trash2 className="mr-2 h-4 w-4" /> Hapus ({selectedMembers.length})
+                         </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                      <AlertDialogHeader>
+                          <AlertDialogTitle>Anda yakin?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                          Tindakan ini akan menghapus {selectedMembers.length} anggota yang dipilih secara permanen. Anggota yang memiliki riwayat transaksi tidak akan dihapus.
+                          </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                          <AlertDialogCancel>Batal</AlertDialogCancel>
+                          <AlertDialogAction onClick={handleBulkDelete}>
+                          Hapus
+                          </AlertDialogAction>
+                      </AlertDialogFooter>
+                      </AlertDialogContent>
+                  </AlertDialog>
+              )}
+              <Button onClick={() => handleDialogOpen(null)}>
+                  <PlusCircle className="mr-2 h-4 w-4" /> Tambah Anggota
+              </Button>
+            </div>
+          )}
         </div>
         <div className="rounded-md border">
           <Table>
@@ -252,12 +256,13 @@ export default function MemberManager({ initialMembers, transactions, cashierDay
                         checked={selectedMembers.length === members.length && members.length > 0}
                         onCheckedChange={toggleSelectAll}
                         aria-label="Pilih semua"
+                        disabled={isReadOnly}
                     />
                 </TableHead>
                 <TableHead>Nama Anggota</TableHead>
                 <TableHead>Total Tunggakan</TableHead>
                 <TableHead>Sisa Kas (Dapat Ditarik)</TableHead>
-                <TableHead className="text-right">Aksi</TableHead>
+                {!isReadOnly && <TableHead className="text-right">Aksi</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -273,6 +278,7 @@ export default function MemberManager({ initialMembers, transactions, cashierDay
                             checked={isSelected}
                             onCheckedChange={() => toggleSelectMember(member.id)}
                             aria-label={`Pilih ${member.name}`}
+                            disabled={isReadOnly}
                         />
                     </TableCell>
                     <TableCell className="font-medium">{member.name}</TableCell>
@@ -282,49 +288,51 @@ export default function MemberManager({ initialMembers, transactions, cashierDay
                     <TableCell className={withdrawableBalance > 0 ? 'text-green-600 font-semibold' : ''}>
                       {formatCurrency(withdrawableBalance)}
                     </TableCell>
-                    <TableCell className="text-right">
-                      <TooltipProvider>
-                        <Button variant="ghost" size="icon" onClick={() => handleDialogOpen(member)}>
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        {memberHasTransactions(member.id) ? (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span tabIndex={0}>
-                                <Button variant="ghost" size="icon" disabled>
-                                  <Ban className="h-4 w-4" />
+                    {!isReadOnly && (
+                      <TableCell className="text-right">
+                        <TooltipProvider>
+                          <Button variant="ghost" size="icon" onClick={() => handleDialogOpen(member)}>
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          {memberHasTransactions(member.id) ? (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span tabIndex={0}>
+                                  <Button variant="ghost" size="icon" disabled>
+                                    <Ban className="h-4 w-4" />
+                                  </Button>
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Anggota tidak bisa dihapus karena memiliki riwayat transaksi.</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          ) : (
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive">
+                                  <Trash2 className="h-4 w-4" />
                                 </Button>
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>Anggota tidak bisa dihapus karena memiliki riwayat transaksi.</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        ) : (
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive">
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Anda yakin?</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  Tindakan ini tidak dapat dibatalkan. Ini akan menghapus anggota secara permanen.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Batal</AlertDialogCancel>
-                                <AlertDialogAction onClick={() => handleDelete(member.id)}>
-                                  Hapus
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        )}
-                      </TooltipProvider>
-                    </TableCell>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Anda yakin?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Tindakan ini tidak dapat dibatalkan. Ini akan menghapus anggota secara permanen.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Batal</AlertDialogCancel>
+                                  <AlertDialogAction onClick={() => handleDelete(member.id)}>
+                                    Hapus
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          )}
+                        </TooltipProvider>
+                      </TableCell>
+                    )}
                   </TableRow>
                 );
               })}
