@@ -33,4 +33,5 @@ export type CashierDay = {
   id: string;
   date: string;
   description: string;
+  duesAmount?: number;
 };

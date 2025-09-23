@@ -197,20 +197,27 @@ export async function deleteTransaction(id: string) {
 export async function getCashierDays(): Promise<CashierDay[]> {
     const cashierDaysCol = collection(db, 'cashier_days');
     const snapshot = await getDocs(query(cashierDaysCol, orderBy('date', 'desc')));
-    return snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        date: doc.data().date.toDate().toISOString(),
-    } as unknown as CashierDay));
+    const settings = await getSettings();
+
+    return snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+            id: doc.id,
+            ...data,
+            date: data.date.toDate().toISOString(),
+            duesAmount: typeof data.duesAmount === 'number' ? data.duesAmount : settings.duesAmount,
+        } as unknown as CashierDay
+    });
 }
 
-export async function addCashierDay(date: Date, description: string) {
-    if (!date || !description) {
+export async function addCashierDay(data: { date: Date; description: string; duesAmount: number }) {
+    if (!data.date || !data.description) {
         return { error: 'Tanggal dan deskripsi tidak boleh kosong.' };
     }
     await addDoc(collection(db, 'cashier_days'), {
-        date: Timestamp.fromDate(date),
-        description
+        date: Timestamp.fromDate(data.date),
+        description: data.description,
+        duesAmount: data.duesAmount
     });
     revalidatePath('/admin');
     revalidatePath('/anggota', 'layout');

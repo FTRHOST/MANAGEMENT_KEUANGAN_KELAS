@@ -55,12 +55,30 @@ import { PlusCircle, Trash2, Loader2, CalendarIcon, FileDown } from 'lucide-reac
 import { cn } from '@/lib/utils';
 import { exportToXLSX } from '@/lib/export';
 import { Checkbox } from '@/components/ui/checkbox';
-
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 
 const cashierDaySchema = z.object({
   date: z.date({ required_error: 'Tanggal wajib diisi.' }),
   description: z.string().min(3, 'Deskripsi minimal 3 karakter'),
+  duesAmountOption: z.string({ required_error: 'Nominal iuran wajib dipilih' }),
+  customDuesAmount: z.coerce.number().optional(),
+}).refine(data => {
+    if (data.duesAmountOption === 'custom' && (!data.customDuesAmount || data.customDuesAmount <= 0)) {
+        return false;
+    }
+    return true;
+}, {
+    message: 'Jumlah kustom harus lebih dari 0',
+    path: ['customDuesAmount'],
 });
+
+function formatCurrency(amount: number) {
+  return new Intl.NumberFormat('id-ID', {
+    style: 'currency',
+    currency: 'IDR',
+    minimumFractionDigits: 0,
+  }).format(amount);
+}
 
 type CashierDayManagerProps = {
   initialCashierDays: CashierDay[];
@@ -75,16 +93,23 @@ export default function CashierDayManager({ initialCashierDays }: CashierDayMana
 
   const form = useForm<z.infer<typeof cashierDaySchema>>({
     resolver: zodResolver(cashierDaySchema),
-    defaultValues: { description: '', date: new Date() },
+    defaultValues: { description: '', date: new Date(), duesAmountOption: '2000' },
   });
+
+  const duesAmountOption = form.watch('duesAmountOption');
 
   const onSubmit = async (values: z.infer<typeof cashierDaySchema>) => {
     setSubmitting(true);
     try {
-      await addCashierDay(values.date, values.description);
+      const duesAmount = values.duesAmountOption === 'custom' 
+        ? values.customDuesAmount! 
+        : parseInt(values.duesAmountOption, 10);
+
+      await addCashierDay({ date: values.date, description: values.description, duesAmount });
+      
       toast({ title: 'Sukses', description: 'Hari kas baru berhasil ditambahkan.' });
       setDialogOpen(false);
-      form.reset({ description: '', date: new Date() });
+      form.reset({ description: '', date: new Date(), duesAmountOption: '2000', customDuesAmount: undefined });
       // Revalidation will update the list
     } catch (error: any) {
       toast({ variant: 'destructive', title: 'Error', description: error.message });
@@ -129,7 +154,8 @@ export default function CashierDayManager({ initialCashierDays }: CashierDayMana
   const handleExport = () => {
     const dataToExport = cashierDays.map(day => ({
         Tanggal: format(new Date(day.date), 'PPP', { locale: id }),
-        Deskripsi: day.description
+        Deskripsi: day.description,
+        'Nominal Iuran': formatCurrency(day.duesAmount || 0),
     }));
     exportToXLSX(dataToExport, 'Daftar_Hari_Kas', 'Hari Kas');
   };
@@ -138,7 +164,7 @@ export default function CashierDayManager({ initialCashierDays }: CashierDayMana
     <Card>
       <CardHeader>
         <CardTitle>Manajemen Hari Kas</CardTitle>
-        <CardDescription>Tambah atau hapus tanggal pengumpulan iuran kas.</CardDescription>
+        <CardDescription>Tambah atau hapus tanggal pengumpulan iuran kas beserta nominalnya.</CardDescription>
       </CardHeader>
       <CardContent>
         <div className="flex justify-between items-center mb-4">
@@ -187,6 +213,7 @@ export default function CashierDayManager({ initialCashierDays }: CashierDayMana
                 </TableHead>
                 <TableHead>Tanggal</TableHead>
                 <TableHead>Deskripsi</TableHead>
+                <TableHead>Nominal Iuran</TableHead>
                 <TableHead className="text-right">Aksi</TableHead>
               </TableRow>
             </TableHeader>
@@ -204,6 +231,7 @@ export default function CashierDayManager({ initialCashierDays }: CashierDayMana
                     </TableCell>
                   <TableCell>{format(new Date(day.date), 'PPP', { locale: id })}</TableCell>
                   <TableCell className="font-medium">{day.description}</TableCell>
+                  <TableCell>{formatCurrency(day.duesAmount || 0)}</TableCell>
                   <TableCell className="text-right">
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
@@ -279,6 +307,57 @@ export default function CashierDayManager({ initialCashierDays }: CashierDayMana
                           </FormItem>
                         )}
                       />
+                      <FormField
+                        control={form.control}
+                        name="duesAmountOption"
+                        render={({ field }) => (
+                            <FormItem className="space-y-3">
+                                <FormLabel>Nominal Iuran</FormLabel>
+                                <FormControl>
+                                    <RadioGroup
+                                        onValueChange={field.onChange}
+                                        defaultValue={field.value}
+                                        className="flex flex-col space-y-1"
+                                    >
+                                        <FormItem className="flex items-center space-x-3 space-y-0">
+                                            <FormControl><RadioGroupItem value="2000" /></FormControl>
+                                            <FormLabel className="font-normal">{formatCurrency(2000)}</FormLabel>
+                                        </FormItem>
+                                        <FormItem className="flex items-center space-x-3 space-y-0">
+                                            <FormControl><RadioGroupItem value="4000" /></FormControl>
+                                            <FormLabel className="font-normal">{formatCurrency(4000)}</FormLabel>
+                                        </FormItem>
+                                        <FormItem className="flex items-center space-x-3 space-y-0">
+                                            <FormControl><RadioGroupItem value="6000" /></FormControl>
+                                            <FormLabel className="font-normal">{formatCurrency(6000)}</FormLabel>
+                                        </FormItem>
+                                        <FormItem className="flex items-center space-x-3 space-y-0">
+                                            <FormControl><RadioGroupItem value="custom" /></FormControl>
+                                            <FormLabel className="font-normal">Lainnya...</FormLabel>
+                                        </FormItem>
+                                    </RadioGroup>
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                      />
+
+                      {duesAmountOption === 'custom' && (
+                        <FormField
+                            control={form.control}
+                            name="customDuesAmount"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Jumlah Kustom</FormLabel>
+                                    <FormControl>
+                                        <Input type="number" placeholder="Masukkan jumlah" {...field} />
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                      )}
+
                         <DialogFooter>
                             <DialogClose asChild>
                                 <Button type="button" variant="secondary">Batal</Button>

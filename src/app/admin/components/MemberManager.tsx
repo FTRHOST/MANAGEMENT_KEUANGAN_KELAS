@@ -160,7 +160,6 @@ export default function MemberManager({ initialMembers, transactions, cashierDay
 
   const memberBalances = useMemo(() => {
     const balances = new Map<string, { unpaidDues: number; withdrawableBalance: number }>();
-    const duesPerMeeting = settings.duesAmount || 0;
     const totalMemberCount = members.length > 0 ? members.length : 1;
     
     const sharedExpensesTotal = transactions
@@ -173,7 +172,7 @@ export default function MemberManager({ initialMembers, transactions, cashierDay
         .filter(t => t.type === 'Pemasukan' && t.memberId === member.id)
         .reduce((sum, t) => sum + t.amount, 0);
 
-      const totalDuesLiability = cashierDays.length * duesPerMeeting;
+      const totalDuesLiability = cashierDays.reduce((sum, day) => sum + (day.duesAmount || settings.duesAmount || 0), 0);
 
       const personalExpensesTotal = transactions
         .filter(t => t.type === 'Pengeluaran' && t.memberId === member.id)
@@ -370,5 +369,3 @@ export default function MemberManager({ initialMembers, transactions, cashierDay
     </Card>
   );
 }
-
-    
