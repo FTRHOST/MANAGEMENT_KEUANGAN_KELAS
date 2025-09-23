@@ -160,10 +160,9 @@ export default function MemberManager({ initialMembers, transactions, cashierDay
 
   const memberBalances = useMemo(() => {
     const balances = new Map<string, { finalBalance: number; status: string }>();
-    const totalMemberCount = members.length > 0 ? members.length : 1;
     const duesPerMeeting = settings.duesAmount || 0;
-
-    // Hitung total pengeluaran bersama
+    const totalMemberCount = members.length > 0 ? members.length : 1;
+    
     const sharedExpensesTotal = transactions
       .filter((t) => t.type === 'Pengeluaran' && !t.memberId)
       .reduce((sum, t) => sum + t.amount, 0);
@@ -171,7 +170,7 @@ export default function MemberManager({ initialMembers, transactions, cashierDay
 
     members.forEach(member => {
       // Total Iuran Wajib
-      const totalDues = cashierDays.length * duesPerMeeting;
+      const totalDuesLiability = cashierDays.length * duesPerMeeting;
 
       // Total Pembayaran
       const totalPaid = transactions
@@ -183,13 +182,13 @@ export default function MemberManager({ initialMembers, transactions, cashierDay
         .filter(t => t.type === 'Pengeluaran' && t.memberId === member.id)
         .reduce((sum, t) => sum + t.amount, 0);
 
+      // Total Beban Pengeluaran (Pribadi + Bersama)
       const totalExpenses = personalExpensesTotal + sharedExpensePerMember;
       
-      const finalBalance = totalPaid - totalDues - totalExpenses;
+      // Saldo Akhir
+      const finalBalance = totalPaid - totalDuesLiability - totalExpenses;
       
-      const status = finalBalance < 0 
-        ? `Tunggakan` 
-        : `Sisa Kas`;
+      const status = finalBalance < 0 ? 'Tunggakan' : 'Sisa Kas';
 
       balances.set(member.id, { finalBalance, status });
     });
@@ -290,7 +289,7 @@ export default function MemberManager({ initialMembers, transactions, cashierDay
                         {status}
                     </TableCell>
                     <TableCell className={finalBalance >= 0 ? 'text-green-600 font-semibold' : 'text-destructive font-semibold'}>
-                      {formatCurrency(finalBalance)}
+                      {formatCurrency(Math.abs(finalBalance))}
                     </TableCell>
                     <TableCell className="text-right">
                       <TooltipProvider>
@@ -379,7 +378,3 @@ export default function MemberManager({ initialMembers, transactions, cashierDay
     </Card>
   );
 }
-
-    
-
-    
