@@ -92,9 +92,10 @@ const transactionSchema = z.object({
   description: z.string().min(3, 'Deskripsi minimal 3 karakter.'),
   memberId: z.string().optional(),
   treasurer: z.enum(['Bendahara 1', 'Bendahara 2']).optional(),
+  applyToAll: z.boolean().optional(),
 }).refine(data => {
-    // Member is mandatory for "Pemasukan"
-    if (data.type === 'Pemasukan') {
+    // Member is mandatory for "Pemasukan" unless applyToAll is true
+    if (data.type === 'Pemasukan' && !data.applyToAll) {
         return !!data.memberId;
     }
     return true;
@@ -119,10 +120,11 @@ export default function TransactionManager({ initialTransactions, members, isRea
   
   const form = useForm<z.infer<typeof transactionSchema>>({
     resolver: zodResolver(transactionSchema),
-    defaultValues: { type: 'Pemasukan', description: '' },
+    defaultValues: { type: 'Pemasukan', description: '', applyToAll: false },
   });
 
   const transactionType = form.watch('type');
+  const applyToAll = form.watch('applyToAll');
 
   const handleDialogOpen = (transaction: Transaction | null) => {
     if (isReadOnly) return;
@@ -132,9 +134,10 @@ export default function TransactionManager({ initialTransactions, members, isRea
         ...transaction,
         amount: Math.abs(transaction.amount),
         date: new Date(transaction.date),
+        applyToAll: false, // Cannot edit bulk transactions this way
       });
     } else {
-      form.reset({ type: 'Pemasukan', amount: 0, description: '', date: new Date(), memberId: undefined, treasurer: undefined });
+      form.reset({ type: 'Pemasukan', amount: 0, description: '', date: new Date(), memberId: undefined, treasurer: undefined, applyToAll: false });
     }
     setDialogOpen(true);
   };
@@ -143,7 +146,10 @@ export default function TransactionManager({ initialTransactions, members, isRea
     setSubmitting(true);
     try {
       if (editingTransaction) {
-        await updateTransaction(editingTransaction.id, values);
+        // applyToAll is disabled for editing
+        const updateValues = { ...values };
+        delete updateValues.applyToAll;
+        await updateTransaction(editingTransaction.id, updateValues);
         toast({ title: 'Sukses', description: 'Transaksi berhasil diperbarui.' });
       } else {
         await addTransaction(values);
@@ -347,7 +353,10 @@ export default function TransactionManager({ initialTransactions, members, isRea
                     <FormItem className="space-y-3">
                       <FormLabel>Tipe Transaksi</FormLabel>
                       <FormControl>
-                        <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex space-x-4">
+                        <RadioGroup onValueChange={(value) => {
+                            field.onChange(value);
+                            if (value === 'Pengeluaran') form.setValue('applyToAll', false);
+                        }} defaultValue={field.value} className="flex space-x-4">
                           <FormItem className="flex items-center space-x-2 space-y-0">
                             <FormControl><RadioGroupItem value="Pemasukan" /></FormControl>
                             <FormLabel>Pemasukan</FormLabel>
@@ -363,7 +372,27 @@ export default function TransactionManager({ initialTransactions, members, isRea
                   )}
                 />
                 
-                {transactionType === 'Pemasukan' && (
+                {transactionType === 'Pemasukan' && !editingTransaction && (
+                   <FormField
+                      control={form.control}
+                      name="applyToAll"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                          <FormControl>
+                            <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                          </FormControl>
+                          <div className="space-y-1 leading-none">
+                            <FormLabel>Terapkan ke Semua Anggota (Bagi 2)</FormLabel>
+                            <p className="text-xs text-muted-foreground">
+                              Jika dicentang, jumlah pemasukan akan dibagi 2 dan diterapkan ke setiap anggota.
+                            </p>
+                          </div>
+                        </FormItem>
+                      )}
+                    />
+                )}
+
+                {transactionType === 'Pemasukan' && !applyToAll && (
                   <>
                     <FormField
                       control={form.control}
@@ -381,25 +410,37 @@ export default function TransactionManager({ initialTransactions, members, isRea
                         </FormItem>
                       )}
                     />
-                     <FormField
-                        control={form.control}
-                        name="description"
-                        render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>Deskripsi (e.g. Iuran Minggu 1)</FormLabel>
-                                <FormControl>
-                                    <Input {...field} />
-                                </FormControl>
-                                <FormMessage />
-                            </FormItem>
-                        )}
-                    />
+                  </>
+                )}
+
+                <FormField
+                    control={form.control}
+                    name="description"
+                    render={({ field }) => (
+                        <FormItem>
+                            <FormLabel>
+                                {transactionType === 'Pemasukan' 
+                                ? 'Deskripsi Pemasukan (e.g. Iuran Minggu 1)'
+                                : 'Nama Pengeluaran (e.g. Beli Spidol)'
+                                }
+                            </FormLabel>
+                            <FormControl>
+                                <Input {...field} />
+                            </FormControl>
+                            <FormMessage />
+                        </FormItem>
+                    )}
+                />
+
+                {(transactionType === 'Pemasukan' || transactionType === 'Pengeluaran') && (
                     <FormField
                       control={form.control}
                       name="treasurer"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Diterima oleh Bendahara</FormLabel>
+                          <FormLabel>
+                            {transactionType === 'Pemasukan' ? 'Diterima oleh Bendahara' : 'Dibayar oleh Bendahara (Opsional)'}
+                          </FormLabel>
                           <Select onValueChange={field.onChange} defaultValue={field.value}>
                             <FormControl><SelectTrigger><SelectValue placeholder="Pilih bendahara" /></SelectTrigger></FormControl>
                             <SelectContent>
@@ -407,28 +448,17 @@ export default function TransactionManager({ initialTransactions, members, isRea
                                 <SelectItem value="Bendahara 2">Bendahara 2</SelectItem>
                             </SelectContent>
                           </Select>
+                           <p className="text-xs text-muted-foreground">
+                              Pilih bendahara yang mengelola transaksi ini.
+                           </p>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
-                  </>
                 )}
 
                 {transactionType === 'Pengeluaran' && (
                   <>
-                   <FormField
-                        control={form.control}
-                        name="description"
-                        render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>Nama Pengeluaran (e.g. Beli Spidol)</FormLabel>
-                                <FormControl>
-                                    <Input {...field} />
-                                </FormControl>
-                                <FormMessage />
-                            </FormItem>
-                        )}
-                    />
                     <FormField
                       control={form.control}
                       name="memberId"
@@ -443,26 +473,6 @@ export default function TransactionManager({ initialTransactions, members, isRea
                           </Select>
                            <p className="text-xs text-muted-foreground">
                               Jika tidak dipilih, akan menjadi pengeluaran bersama.
-                           </p>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="treasurer"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Dibayar oleh Bendahara (Opsional)</FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value}>
-                            <FormControl><SelectTrigger><SelectValue placeholder="Pilih bendahara" /></SelectTrigger></FormControl>
-                            <SelectContent>
-                                <SelectItem value="Bendahara 1">Bendahara 1</SelectItem>
-                                <SelectItem value="Bendahara 2">Bendahara 2</SelectItem>
-                            </SelectContent>
-                          </Select>
-                           <p className="text-xs text-muted-foreground">
-                              Pilih bendahara yang melakukan pembayaran.
                            </p>
                           <FormMessage />
                         </FormItem>

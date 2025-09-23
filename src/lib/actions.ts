@@ -109,42 +109,71 @@ export async function deleteMember(id: string) {
 }
 
 // Transaction Actions
-export async function addTransaction(transaction: Omit<Transaction, 'id' | 'date'> & { date: Date }) {
-  const dataToSave: any = {
-    ...transaction,
-    date: Timestamp.fromDate(transaction.date),
-  };
+export async function addTransaction(transaction: Omit<Transaction, 'id' | 'date' | 'memberId'> & { date: Date, memberId?: string | null, applyToAll?: boolean }) {
+  if (transaction.type === 'Pemasukan' && transaction.applyToAll) {
+    const batch = writeBatch(db);
+    const membersSnapshot = await getDocs(query(collection(db, 'members'), orderBy('name')));
+    const members = membersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Member));
+    const amountPerMember = transaction.amount / 2;
 
-  if (transaction.type === 'Pemasukan' && transaction.memberId) {
-    const memberDoc = await getDoc(doc(db, 'members', transaction.memberId));
-    if(memberDoc.exists()) {
-        dataToSave.memberName = memberDoc.data().name;
-    }
-  } else if (transaction.type === 'Pengeluaran') {
-     // For individual expenses, assign member name
-     if (transaction.memberId) {
-        const memberDoc = await getDoc(doc(db, 'members', transaction.memberId));
-        if(memberDoc.exists()) dataToSave.memberName = memberDoc.data().name;
-     } else {
-        // For shared expenses, memberId and memberName are null
+    if (members.length === 0) throw new Error("Tidak ada anggota untuk menerapkan transaksi.");
+
+    members.forEach(member => {
+      const transactionDocRef = doc(collection(db, 'transactions'));
+      const dataToSave = {
+        type: transaction.type,
+        amount: amountPerMember,
+        date: Timestamp.fromDate(transaction.date),
+        description: transaction.description,
+        memberId: member.id,
+        memberName: member.name,
+        treasurer: transaction.treasurer || null,
+      };
+      batch.set(transactionDocRef, dataToSave);
+    });
+
+    await batch.commit();
+
+  } else {
+    const dataToSave: any = {
+      ...transaction,
+      date: Timestamp.fromDate(transaction.date),
+    };
+
+    if (transaction.type === 'Pemasukan' && transaction.memberId) {
+      const memberDoc = await getDoc(doc(db, 'members', transaction.memberId));
+      if(memberDoc.exists()) {
+          dataToSave.memberName = memberDoc.data().name;
+      }
+    } else if (transaction.type === 'Pengeluaran') {
+       // For individual expenses, assign member name
+       if (transaction.memberId) {
+          const memberDoc = await getDoc(doc(db, 'members', transaction.memberId));
+          if(memberDoc.exists()) dataToSave.memberName = memberDoc.data().name;
+       } else {
+          // For shared expenses, memberId and memberName are null
+          dataToSave.memberId = null;
+          dataToSave.memberName = null;
+       }
+    } else {
+        // Fallback for other cases (Pemasukan without memberId)
         dataToSave.memberId = null;
         dataToSave.memberName = null;
-     }
-  } else {
-      // Fallback for other cases (Pemasukan without memberId)
-      dataToSave.memberId = null;
-      dataToSave.memberName = null;
-  }
-   
-  if (!dataToSave.treasurer) {
-    dataToSave.treasurer = null;
-  }
+    }
+    
+    delete dataToSave.applyToAll; // Remove temporary flag
 
-  await addDoc(collection(db, 'transactions'), dataToSave);
+    if (!dataToSave.treasurer) {
+      dataToSave.treasurer = null;
+    }
+
+    await addDoc(collection(db, 'transactions'), dataToSave);
+  }
 
   revalidatePath('/admin');
   revalidatePath('/anggota', 'layout');
 }
+
 
 export async function updateTransaction(id: string, transaction: Omit<Transaction, 'id' | 'date'> & { date: Date }) {
     const dataToUpdate: any = {
