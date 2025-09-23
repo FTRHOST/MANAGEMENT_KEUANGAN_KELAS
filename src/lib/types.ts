@@ -13,6 +13,7 @@ export type Transaction = {
   memberId?: string | null; // Allow null for shared expenses
   memberName?: string | null; // Allow null for shared expenses
   treasurer?: 'Bendahara 1' | 'Bendahara 2';
+  batchId?: string; // To group transactions
 };
 
 export type TransactionData = Omit<Transaction, 'id' | 'date'> & {

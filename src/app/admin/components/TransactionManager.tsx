@@ -1,8 +1,8 @@
 
 "use client";
 
-import { useState } from 'react';
-import { useForm, Controller } from 'react-hook-form';
+import { useState, useMemo } from 'react';
+import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import {
@@ -56,7 +56,7 @@ import { useToast } from '@/hooks/use-toast';
 import { addTransaction, updateTransaction, deleteTransaction } from '@/lib/actions';
 import type { Member, Transaction } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { PlusCircle, Edit, Trash2, Loader2, CalendarIcon, Users, FileDown } from 'lucide-react';
+import { PlusCircle, Edit, Trash2, Loader2, CalendarIcon, Users, FileDown, Ban } from 'lucide-react';
 import { format } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -126,8 +126,30 @@ export default function TransactionManager({ initialTransactions, members, isRea
   const transactionType = form.watch('type');
   const applyToAll = form.watch('applyToAll');
 
+  const groupedTransactions = useMemo(() => {
+    const transactionMap = new Map<string, Transaction & { memberCount?: number; totalAmount?: number }>();
+
+    initialTransactions.forEach(t => {
+      if (t.batchId) {
+        const existing = transactionMap.get(t.batchId);
+        if (existing) {
+          existing.memberCount = (existing.memberCount || 1) + 1;
+          existing.totalAmount = (existing.totalAmount || existing.amount) + t.amount;
+        } else {
+          // This is the first transaction of the batch we've seen
+          transactionMap.set(t.batchId, { ...t, memberCount: 1, totalAmount: t.amount });
+        }
+      } else {
+        // Individual transaction, use its own ID as the key
+        transactionMap.set(t.id, t);
+      }
+    });
+
+    return Array.from(transactionMap.values()).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [initialTransactions]);
+
   const handleDialogOpen = (transaction: Transaction | null) => {
-    if (isReadOnly) return;
+    if (isReadOnly || (transaction?.batchId && !editingTransaction)) return;
     setEditingTransaction(transaction);
     if (transaction) {
       form.reset({
@@ -163,18 +185,39 @@ export default function TransactionManager({ initialTransactions, members, isRea
     setSubmitting(false);
   };
 
-  const handleDelete = async (id: string) => {
-    await deleteTransaction(id);
-    setTransactions(transactions.filter(t => t.id !== id));
+  const handleDelete = async (id: string, batchId?: string) => {
+    await deleteTransaction(id, batchId); // Pass batchId if it exists
+    if(batchId) {
+        setTransactions(transactions.filter(t => t.batchId !== batchId));
+    } else {
+        setTransactions(transactions.filter(t => t.id !== id));
+    }
     toast({ title: 'Sukses', description: 'Transaksi berhasil dihapus.' });
   };
   
   const handleBulkDelete = async () => {
     try {
-        await Promise.all(selectedTransactions.map(id => deleteTransaction(id)));
-        setTransactions(transactions.filter(t => !selectedTransactions.includes(t.id)));
-        toast({ title: 'Sukses', description: `${selectedTransactions.length} transaksi berhasil dihapus.` });
+        const batchIdsToDelete = new Set<string>();
+        const individualIdsToDelete: string[] = [];
+
+        selectedTransactions.forEach(id => {
+            const t = groupedTransactions.find(t => t.id === id);
+            if (t?.batchId) {
+                batchIdsToDelete.add(t.batchId);
+            } else {
+                individualIdsToDelete.push(id);
+            }
+        });
+
+        const deletePromises: Promise<any>[] = [];
+        batchIdsToDelete.forEach(batchId => deletePromises.push(deleteTransaction("", batchId)));
+        individualIdsToDelete.forEach(id => deletePromises.push(deleteTransaction(id)));
+        
+        await Promise.all(deletePromises);
+
+        toast({ title: 'Sukses', description: `${selectedTransactions.length} item transaksi berhasil dihapus.` });
         setSelectedTransactions([]);
+        // Revalidation will refresh the data
     } catch (error) {
         toast({ variant: 'destructive', title: 'Error', description: 'Gagal menghapus transaksi yang dipilih.' });
     }
@@ -185,15 +228,15 @@ export default function TransactionManager({ initialTransactions, members, isRea
   };
 
   const toggleSelectAll = () => {
-    if (selectedTransactions.length === transactions.length) {
+    if (selectedTransactions.length === groupedTransactions.length) {
         setSelectedTransactions([]);
     } else {
-        setSelectedTransactions(transactions.map(t => t.id));
+        setSelectedTransactions(groupedTransactions.map(t => t.id));
     }
   };
 
   const handleExport = () => {
-    const dataToExport = transactions.map(t => ({
+    const dataToExport = initialTransactions.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(t => ({
         Tanggal: formatDate(t.date),
         Tipe: t.type,
         'Nama/Deskripsi': t.memberName || t.description,
@@ -228,7 +271,7 @@ export default function TransactionManager({ initialTransactions, members, isRea
                       <AlertDialogHeader>
                           <AlertDialogTitle>Anda yakin?</AlertDialogTitle>
                           <AlertDialogDescription>
-                          Tindakan ini akan menghapus {selectedTransactions.length} transaksi yang dipilih secara permanen.
+                          Tindakan ini akan menghapus {selectedTransactions.length} item transaksi yang dipilih secara permanen. Transaksi massal akan dihapus untuk semua anggota.
                           </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
@@ -252,7 +295,7 @@ export default function TransactionManager({ initialTransactions, members, isRea
               <TableRow>
                 <TableHead className="w-12">
                    <Checkbox
-                        checked={selectedTransactions.length === transactions.length && transactions.length > 0}
+                        checked={selectedTransactions.length === groupedTransactions.length && groupedTransactions.length > 0}
                         onCheckedChange={toggleSelectAll}
                         aria-label="Pilih semua"
                         disabled={isReadOnly}
@@ -267,8 +310,10 @@ export default function TransactionManager({ initialTransactions, members, isRea
               </TableRow>
             </TableHeader>
             <TableBody>
-              {transactions.map((transaction) => {
+              {groupedTransactions.map((transaction) => {
                 const isSelected = selectedTransactions.includes(transaction.id);
+                const isBulk = !!transaction.batchId;
+
                 return (
                 <TableRow key={transaction.id} data-state={isSelected ? "selected" : ""}>
                    <TableCell>
@@ -286,7 +331,18 @@ export default function TransactionManager({ initialTransactions, members, isRea
                     </Badge>
                   </TableCell>
                   <TableCell className="font-medium">
-                    {transaction.memberName ? (
+                    {isBulk ? (
+                        <TooltipProvider>
+                            <Tooltip>
+                                <TooltipTrigger className="flex items-center gap-1 cursor-default">
+                                    {transaction.description} <Users className="h-3 w-3 text-muted-foreground"/>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                    <p>Transaksi massal untuk {transaction.memberCount} anggota</p>
+                                </TooltipContent>
+                            </Tooltip>
+                        </TooltipProvider>
+                    ) : transaction.memberName ? (
                         transaction.memberName
                     ) : (
                         <TooltipProvider>
@@ -303,13 +359,30 @@ export default function TransactionManager({ initialTransactions, members, isRea
                   </TableCell>
                   <TableCell>{transaction.treasurer || '-'}</TableCell>
                   <TableCell className={`text-right font-semibold ${transaction.type === 'Pemasukan' ? 'text-green-600' : 'text-destructive'}`}>
-                    {transaction.type === 'Pemasukan' ? '+' : '-'} {formatCurrency(transaction.amount)}
+                    {transaction.type === 'Pemasukan' ? '+' : '-'} {formatCurrency(isBulk ? transaction.totalAmount! : transaction.amount)}
                   </TableCell>
                   {!isReadOnly && (
                     <TableCell className="text-right">
-                      <Button variant="ghost" size="icon" onClick={() => handleDialogOpen(transaction)}>
-                        <Edit className="h-4 w-4" />
-                      </Button>
+                       <TooltipProvider>
+                          {isBulk ? (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span tabIndex={0}>
+                                    <Button variant="ghost" size="icon" disabled>
+                                      <Ban className="h-4 w-4" />
+                                    </Button>
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>Transaksi massal tidak dapat diedit.</p>
+                                </TooltipContent>
+                              </Tooltip>
+                          ) : (
+                            <Button variant="ghost" size="icon" onClick={() => handleDialogOpen(transaction)}>
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </TooltipProvider>
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
                           <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive">
@@ -320,12 +393,15 @@ export default function TransactionManager({ initialTransactions, members, isRea
                           <AlertDialogHeader>
                             <AlertDialogTitle>Anda yakin?</AlertDialogTitle>
                             <AlertDialogDescription>
-                              Tindakan ini tidak dapat dibatalkan. Ini akan menghapus data transaksi secara permanen.
+                              {isBulk 
+                                ? `Ini akan menghapus ${transaction.memberCount} transaksi terkait dari semua anggota.`
+                                : "Tindakan ini tidak dapat dibatalkan. Ini akan menghapus data transaksi secara permanen."
+                              }
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
                             <AlertDialogCancel>Batal</AlertDialogCancel>
-                            <AlertDialogAction onClick={() => handleDelete(transaction.id)}>
+                            <AlertDialogAction onClick={() => handleDelete(transaction.id, transaction.batchId)}>
                               Hapus
                             </AlertDialogAction>
                           </AlertDialogFooter>
@@ -382,9 +458,9 @@ export default function TransactionManager({ initialTransactions, members, isRea
                             <Checkbox checked={field.value} onCheckedChange={field.onChange} />
                           </FormControl>
                           <div className="space-y-1 leading-none">
-                            <FormLabel>Terapkan ke Semua Anggota (Bagi 2)</FormLabel>
+                            <FormLabel>Terapkan ke Semua Anggota (Bagi Rata)</FormLabel>
                             <p className="text-xs text-muted-foreground">
-                              Jika dicentang, jumlah pemasukan akan dibagi 2 dan diterapkan ke setiap anggota.
+                              Jika dicentang, jumlah pemasukan akan dibagi rata untuk setiap anggota.
                             </p>
                           </div>
                         </FormItem>
@@ -489,7 +565,7 @@ export default function TransactionManager({ initialTransactions, members, isRea
                         <FormItem>
                             <FormLabel>Jumlah</FormLabel>
                             <FormControl>
-                                <Input type="number" placeholder="2000" {...field} />
+                                <Input type="number" placeholder="70000" {...field} />
                             </FormControl>
                             <FormMessage />
                         </FormItem>

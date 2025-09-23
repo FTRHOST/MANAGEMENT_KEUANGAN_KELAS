@@ -19,6 +19,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { Member, Transaction, TransactionData, Settings, CashierDay } from '@/lib/types';
+import { randomUUID } from 'crypto';
 
 // Settings Actions
 export async function getSettings(): Promise<Settings> {
@@ -114,13 +115,15 @@ export async function addTransaction(transaction: Omit<Transaction, 'id' | 'date
     const batch = writeBatch(db);
     const membersSnapshot = await getDocs(query(collection(db, 'members'), orderBy('name')));
     const members = membersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Member));
-    const amountPerMember = transaction.amount / 2;
-
+    
     if (members.length === 0) throw new Error("Tidak ada anggota untuk menerapkan transaksi.");
+    
+    const amountPerMember = transaction.amount / members.length;
+    const batchId = randomUUID(); // Group transactions from this operation
 
     members.forEach(member => {
       const transactionDocRef = doc(collection(db, 'transactions'));
-      const dataToSave = {
+      const dataToSave: Partial<Transaction> & { date: Timestamp } = {
         type: transaction.type,
         amount: amountPerMember,
         date: Timestamp.fromDate(transaction.date),
@@ -128,6 +131,7 @@ export async function addTransaction(transaction: Omit<Transaction, 'id' | 'date
         memberId: member.id,
         memberName: member.name,
         treasurer: transaction.treasurer || null,
+        batchId: batchId, // Add batchId to each transaction
       };
       batch.set(transactionDocRef, dataToSave);
     });
@@ -216,8 +220,20 @@ export async function updateTransaction(id: string, transaction: Omit<Transactio
     revalidatePath('/anggota', 'layout');
 }
 
-export async function deleteTransaction(id: string) {
-  await deleteDoc(doc(db, 'transactions', id));
+export async function deleteTransaction(id: string, batchId?: string) {
+  if (batchId) {
+    // This is a bulk delete request
+    const q = query(collection(db, 'transactions'), where('batchId', '==', batchId));
+    const querySnapshot = await getDocs(q);
+    const batch = writeBatch(db);
+    querySnapshot.forEach(doc => {
+      batch.delete(doc.ref);
+    });
+    await batch.commit();
+  } else {
+    // This is a single transaction delete
+    await deleteDoc(doc(db, 'transactions', id));
+  }
   revalidatePath('/admin');
   revalidatePath('/anggota', 'layout');
 }
