@@ -168,12 +168,13 @@ export default function CashierDayManager({ initialCashierDays, isReadOnly }: Ca
   };
 
   const handleCopyInfo = (day: CashierDay) => {
-    const dayName = format(new Date(day.date), 'EEEE', { locale: id });
+    const date = new Date(day.date);
+    const dayAndDate = format(date, 'EEEE, d MMMM yyyy', { locale: id });
     const formattedAmount = formatCurrency(day.duesAmount || 0);
     const textToCopy = `*✨ INFO KAS MINGGUAN ✨*
-Halo semua, sekadar mengingatkan untuk iuran kas hari ini ya!
+Halo semua, sekadar mengingatkan untuk iuran kas besok ya!
 
-🗓️ Hari: *${dayName}*
+🗓️ Hari: *${dayAndDate}*
 💰 Nominal: *${formattedAmount},-*
 💻 Transparansi: kasati25.vercel.app (input nama/NIM)
 
@@ -421,5 +422,3 @@ Terima kasih atas perhatiannya! 🙏`;
     </Card>
   );
 }
-
-    
