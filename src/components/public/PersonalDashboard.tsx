@@ -2,10 +2,8 @@
 "use client";
 
 import { useMemo } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { List, CheckCircle2, XCircle, DollarSign, ArrowDown, ArrowUp, Wallet, Scale } from 'lucide-react';
 import type { Member, Transaction, CashierDay, Settings } from '@/lib/types';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Table,
   TableBody,
@@ -14,6 +12,9 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { Badge } from '../ui/badge';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
+import { Banknote, Landmark, MinusCircle, TrendingDown, Wallet } from 'lucide-react';
 
 function formatCurrency(amount: number) {
   return new Intl.NumberFormat('id-ID', {
@@ -21,11 +22,6 @@ function formatCurrency(amount: number) {
     currency: 'IDR',
     minimumFractionDigits: 0,
   }).format(amount);
-}
-
-function formatDate(dateValue: string | Date) {
-    const date = typeof dateValue === 'string' ? new Date(dateValue) : dateValue;
-    return date.toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' });
 }
 
 type PersonalDashboardProps = {
@@ -36,244 +32,206 @@ type PersonalDashboardProps = {
   totalMembers: number;
 };
 
-export function PersonalDashboard({
-  member,
-  allTransactions,
-  cashierDays,
-  settings,
-  totalMembers,
-}: PersonalDashboardProps) {
-  const { duesAmount } = settings;
-
-  const {
-    totalDeposit,
-    personalExpenses,
-    personalExpenseTransactions,
-    sharedExpensePerMember,
-    sharedExpenseTransactions,
-    paymentHistory,
-    finalBalance,
-    totalExpenses,
-    duesStatus,
-  } = useMemo(() => {
-    const memberTransactions = allTransactions.filter((t) => t.memberId === member.id);
+export function PersonalDashboard({ member, allTransactions, cashierDays, settings, totalMembers }: PersonalDashboardProps) {
+  const financialSummary = useMemo(() => {
+    const memberTransactions = allTransactions.filter(t => t.memberId === member.id);
+    const sharedExpenses = allTransactions.filter(t => t.type === 'Pengeluaran' && !t.memberId);
     
-    // Total uang yang telah disetor oleh anggota
-    const totalDeposit = memberTransactions
-      .filter((t) => t.type === 'Pemasukan')
+    const totalPaid = memberTransactions
+      .filter(t => t.type === 'Pemasukan')
       .reduce((sum, t) => sum + t.amount, 0);
 
-    const paymentHistory = memberTransactions
-      .filter((t) => t.type === 'Pemasukan')
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    const personalExpensesList = memberTransactions.filter(t => t.type === 'Pengeluaran');
+    const personalExpenses = personalExpensesList.reduce((sum, t) => sum + t.amount, 0);
 
-    // Total pengeluaran yang dibebankan ke anggota secara pribadi
-    const personalExpenses = memberTransactions
-      .filter((t) => t.type === 'Pengeluaran')
-      .reduce((sum, t) => sum + t.amount, 0);
+    const validTotalMembers = totalMembers > 0 ? totalMembers : 1;
+    const sharedExpensePerMember = sharedExpenses.reduce((sum, t) => sum + t.amount, 0) / validTotalMembers;
     
-    const personalExpenseTransactions = memberTransactions
-      .filter((t) => t.type === 'Pengeluaran');
+    const totalDues = (settings.duesAmount || 0) * cashierDays.length;
 
-    // Bagian anggota dari pengeluaran bersama
-    const totalSharedExpenses = allTransactions
-      .filter((t) => t.type === 'Pengeluaran' && !t.memberId)
-      .reduce((sum, t) => sum + t.amount, 0);
-    const sharedExpensePerMember = totalSharedExpenses / (totalMembers > 0 ? totalMembers : 1);
-    const sharedExpenseTransactions = allTransactions.filter((t) => t.type === 'Pengeluaran' && !t.memberId);
-    
-    // Total semua beban pengeluaran
-    const totalExpenses = personalExpenses + sharedExpensePerMember;
-    
-    // Saldo Akhir = Total Setoran - Total Beban Pengeluaran
-    const finalBalance = totalDeposit - totalExpenses;
-
-    // Menentukan status pembayaran iuran wajib
-    const sortedCashierDays = [...cashierDays].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    let paidDuesCount = Math.floor(totalDeposit / duesAmount);
-
-    const duesStatus = sortedCashierDays.map((day) => {
-      const isPaid = paidDuesCount > 0;
-      if (isPaid) {
-        paidDuesCount--;
-      }
-      return { ...day, isPaid };
-    });
+    const totalBill = totalDues + personalExpenses + sharedExpensePerMember;
+    const finalBalance = totalPaid - totalBill;
 
     return {
-      totalDeposit,
+      totalPaid,
+      totalDues,
       personalExpenses,
-      personalExpenseTransactions,
       sharedExpensePerMember,
-      sharedExpenseTransactions,
-      paymentHistory,
+      totalBill,
       finalBalance,
-      totalExpenses,
-      duesStatus,
+      duesList: cashierDays,
+      paymentList: memberTransactions.filter(t => t.type === 'Pemasukan'),
+      personalExpensesList,
+      sharedExpensesList: sharedExpenses,
     };
-  }, [member.id, allTransactions, cashierDays, duesAmount, totalMembers]);
+  }, [member.id, allTransactions, cashierDays, settings, totalMembers]);
+
+  const {
+    totalPaid,
+    totalDues,
+    personalExpenses,
+    sharedExpensePerMember,
+    finalBalance,
+    duesList,
+    paymentList,
+    personalExpensesList,
+    sharedExpensesList
+  } = financialSummary;
+
+  const totalExpenses = personalExpenses + sharedExpensePerMember;
 
   return (
     <div className="space-y-6">
       <div className="text-center">
-        <h1 className="text-4xl font-bold font-headline">{member.name}</h1>
-        <p className="text-muted-foreground text-lg">Laporan Keuangan Personal</p>
+        <h1 className="text-4xl font-bold font-headline">Halo, {member.name}!</h1>
+        <p className="text-muted-foreground text-lg">
+          Ini adalah ringkasan keuangan pribadimu di kelas.
+        </p>
       </div>
 
-      {/* Main Financial Summary Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      {/* Main Financial Cards */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Kas Anda (Total Setoran)</CardTitle>
+            <CardTitle className="text-sm font-medium">Total Iuran Masuk</CardTitle>
             <Wallet className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(totalDeposit)}</div>
+            <div className="text-2xl font-bold text-green-600">{formatCurrency(totalPaid)}</div>
+            <p className="text-xs text-muted-foreground">Jumlah yang sudah kamu setorkan.</p>
+          </CardContent>
+        </Card>
+         <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Iuran Wajib</CardTitle>
+            <Banknote className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{formatCurrency(totalDues)}</div>
+            <p className="text-xs text-muted-foreground">{duesList.length} pertemuan kas.</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Beban Pengeluaran</CardTitle>
-            <ArrowDown className="h-4 w-4 text-muted-foreground" />
+            <TrendingDown className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{formatCurrency(totalExpenses)}</div>
-            <p className="text-xs text-muted-foreground">
-                Pribadi {formatCurrency(personalExpenses)} + Bersama {formatCurrency(sharedExpensePerMember)}
-            </p>
+            <p className="text-xs text-muted-foreground">Pribadi + patungan kelas.</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Saldo Akhir</CardTitle>
-            <Scale className="h-4 w-4 text-muted-foreground" />
+            <Landmark className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className={`text-2xl font-bold ${finalBalance >= 0 ? 'text-green-600' : 'text-destructive'}`}>
+            <div className={`text-2xl font-bold ${finalBalance >= 0 ? 'text-primary' : 'text-destructive'}`}>
               {formatCurrency(finalBalance)}
             </div>
             <p className="text-xs text-muted-foreground">
-              {finalBalance >= 0 ? 'Sisa saldo di kas' : 'Jumlah kekurangan'}
+              {finalBalance >= 0 ? 'Sisa saldo kamu.' : 'Jumlah yang perlu kamu lunasi.'}
             </p>
           </CardContent>
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Dues Status */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2"><List className="h-5 w-5" />Status Iuran Wajib</CardTitle>
-            <CardDescription>
-                Daftar iuran wajib mingguan/bulanan dan status pembayarannya.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Table>
-                <TableHeader>
-                    <TableRow>
-                        <TableHead>Deskripsi</TableHead>
-                        <TableHead className="text-right">Status</TableHead>
-                    </TableRow>
-                </TableHeader>
-                <TableBody>
-                    {duesStatus.map((due) => (
-                        <TableRow key={due.id}>
-                             <TableCell>
-                                <div>{due.description}</div>
-                                <div className="text-xs text-muted-foreground">{formatDate(due.date)}</div>
-                            </TableCell>
-                            <TableCell className="text-right">
-                                {due.isPaid ? (
-                                    <Badge variant="default" className="bg-green-100 text-green-800 flex items-center gap-1 w-fit ml-auto">
-                                        <CheckCircle2 className="h-3 w-3" /> Lunas
-                                    </Badge>
-                                ) : (
-                                    <Badge variant="destructive" className="flex items-center gap-1 w-fit ml-auto">
-                                        <XCircle className="h-3 w-3" /> Belum Lunas
-                                    </Badge>
-                                )}
-                            </TableCell>
-                        </TableRow>
-                    ))}
-                </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-
-        {/* Expense Details */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2"><DollarSign className="h-5 w-5"/>Rincian Beban Pengeluaran</CardTitle>
-            <CardDescription>
-                Detail pengeluaran yang dibebankan kepada Anda.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-              <h3 className="font-semibold mb-2">Pengeluaran Pribadi</h3>
-              {personalExpenseTransactions.length > 0 ? (
-                <Table>
-                    <TableBody>
-                        {personalExpenseTransactions.map(t => (
-                            <TableRow key={t.id}>
-                                <TableCell>{t.description}</TableCell>
-                                <TableCell className="text-right font-medium">{formatCurrency(t.amount)}</TableCell>
-                            </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
-              ) : <p className="text-sm text-muted-foreground">Tidak ada pengeluaran pribadi.</p>}
-
-              <h3 className="font-semibold mt-4 mb-2">Pengeluaran Bersama</h3>
-              {sharedExpenseTransactions.length > 0 ? (
-                <Table>
-                    <TableBody>
-                        {sharedExpenseTransactions.map(t => (
-                             <TableRow key={t.id}>
-                                <TableCell>{t.description}</TableCell>
-                                <TableCell className="text-right font-medium">{formatCurrency(t.amount / (totalMembers > 0 ? totalMembers : 1))}</TableCell>
-                            </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
-              ) : <p className="text-sm text-muted-foreground">Tidak ada pengeluaran bersama.</p>}
-          </CardContent>
-        </Card>
-      </div>
-
-       {/* Payment History */}
+      {/* Details Accordion */}
       <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2"><ArrowUp className="h-5 w-5"/>Riwayat Setoran Kas</CardTitle>
-            <CardDescription>
-                Semua transaksi pemasukan yang telah Anda lakukan.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-             {paymentHistory.length > 0 ? (
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                        <TableHead>Tanggal</TableHead>
-                        <TableHead>Deskripsi</TableHead>
-                        <TableHead className="text-right">Jumlah</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {paymentHistory.map(t => (
-                            <TableRow key={t.id}>
-                                <TableCell>{formatDate(t.date)}</TableCell>
-                                <TableCell>{t.description}</TableCell>
-                                <TableCell className="text-right font-medium">{formatCurrency(t.amount)}</TableCell>
-                            </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
-             ): (
-                <p className="text-sm text-muted-foreground text-center py-4">Belum ada riwayat setoran.</p>
-             )}
-          </CardContent>
+        <CardHeader>
+            <CardTitle>Rincian Keuangan</CardTitle>
+            <CardDescription>Lihat detail semua iuran, pembayaran, dan pengeluaranmu di sini.</CardDescription>
+        </CardHeader>
+        <CardContent>
+            <Accordion type="multiple" className="w-full">
+                <AccordionItem value="dues">
+                    <AccordionTrigger>Rincian Iuran Wajib ({formatCurrency(totalDues)})</AccordionTrigger>
+                    <AccordionContent>
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                <TableHead>Tanggal</TableHead>
+                                <TableHead>Deskripsi</TableHead>
+                                <TableHead className="text-right">Jumlah</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {duesList.map(due => (
+                                <TableRow key={due.id}>
+                                    <TableCell>{new Date(due.date).toLocaleDateString('id-ID')}</TableCell>
+                                    <TableCell>{due.description}</TableCell>
+                                    <TableCell className="text-right">{formatCurrency(settings.duesAmount)}</TableCell>
+                                </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </AccordionContent>
+                </AccordionItem>
+                 <AccordionItem value="payments">
+                    <AccordionTrigger>Riwayat Pembayaran ({formatCurrency(totalPaid)})</AccordionTrigger>
+                    <AccordionContent>
+                       <Table>
+                            <TableHeader>
+                                <TableRow>
+                                <TableHead>Tanggal</TableHead>
+                                <TableHead>Deskripsi</TableHead>
+                                <TableHead className="text-right">Jumlah</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {paymentList.length > 0 ? paymentList.map(payment => (
+                                <TableRow key={payment.id}>
+                                    <TableCell>{new Date(payment.date).toLocaleDateString('id-ID')}</TableCell>
+                                    <TableCell>{payment.description}</TableCell>
+                                    <TableCell className="text-right">{formatCurrency(payment.amount)}</TableCell>
+                                </TableRow>
+                                )) : (
+                                <TableRow>
+                                    <TableCell colSpan={3} className="text-center text-muted-foreground">Belum ada riwayat pembayaran.</TableCell>
+                                </TableRow>
+                                )}
+                            </TableBody>
+                        </Table>
+                    </AccordionContent>
+                </AccordionItem>
+                <AccordionItem value="expenses">
+                    <AccordionTrigger>Rincian Beban Pengeluaran ({formatCurrency(totalExpenses)})</AccordionTrigger>
+                    <AccordionContent>
+                       <p className="font-semibold text-md mb-2">Pengeluaran Pribadi ({formatCurrency(personalExpenses)})</p>
+                        <Table className="mb-4">
+                            <TableBody>
+                                {personalExpensesList.length > 0 ? personalExpensesList.map(expense => (
+                                <TableRow key={expense.id}>
+                                    <TableCell>{expense.description}</TableCell>
+                                    <TableCell className="text-right">{formatCurrency(expense.amount)}</TableCell>
+                                </TableRow>
+                                )) : (
+                                     <TableRow><TableCell className="text-center text-muted-foreground">Tidak ada pengeluaran pribadi.</TableCell></TableRow>
+                                )}
+                            </TableBody>
+                        </Table>
+
+                        <p className="font-semibold text-md mb-2">Patungan Pengeluaran Bersama ({formatCurrency(sharedExpensePerMember)})</p>
+                        <Table>
+                            <TableBody>
+                                {sharedExpensesList.length > 0 ? sharedExpensesList.map(expense => (
+                                <TableRow key={expense.id}>
+                                    <TableCell>{expense.description}</TableCell>
+                                    <TableCell className="text-right">{formatCurrency(expense.amount / (totalMembers > 0 ? totalMembers : 1))}</TableCell>
+                                </TableRow>
+                                )) : (
+                                     <TableRow><TableCell className="text-center text-muted-foreground">Tidak ada pengeluaran bersama.</TableCell></TableRow>
+                                )}
+                            </TableBody>
+                        </Table>
+                    </AccordionContent>
+                </AccordionItem>
+            </Accordion>
+        </CardContent>
       </Card>
     </div>
   );
 }
+
+    
