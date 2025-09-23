@@ -159,8 +159,9 @@ export default function MemberManager({ initialMembers, transactions, cashierDay
   };
 
   const memberBalances = useMemo(() => {
-    const balances = new Map<string, number>();
+    const balances = new Map<string, { finalBalance: number, status: string }>();
     const totalMemberCount = members.length > 0 ? members.length : 1;
+    const duesPerMeeting = settings.duesAmount || 0;
 
     // Hitung total pengeluaran bersama
     const sharedExpensesTotal = transactions
@@ -170,7 +171,6 @@ export default function MemberManager({ initialMembers, transactions, cashierDay
 
     members.forEach(member => {
       // Total Iuran Wajib
-      const duesPerMeeting = settings.duesAmount || 0;
       const totalDues = cashierDays.length * duesPerMeeting;
 
       // Total Pembayaran
@@ -179,24 +179,32 @@ export default function MemberManager({ initialMembers, transactions, cashierDay
         .reduce((sum, t) => sum + t.amount, 0);
 
       // Total Pengeluaran Pribadi
-      const personalExpenses = transactions
+      const personalExpensesTotal = transactions
         .filter(t => t.type === 'Pengeluaran' && t.memberId === member.id)
         .reduce((sum, t) => sum + t.amount, 0);
 
-      // Hitung Saldo Akhir
-      const balance = totalPaid - totalDues - personalExpenses - sharedExpensePerMember;
-      balances.set(member.id, balance);
+      const totalExpenses = personalExpensesTotal + sharedExpensePerMember;
+      
+      const finalBalance = totalPaid - totalDues - totalExpenses;
+      
+      const status = finalBalance < 0 
+        ? `Tunggakan ${formatCurrency(Math.abs(finalBalance))}` 
+        : `Sisa Kas ${formatCurrency(finalBalance)}`;
+
+      balances.set(member.id, { finalBalance, status });
     });
     return balances;
   }, [members, transactions, cashierDays, settings]);
 
   const handleExport = () => {
     const dataToExport = members.map(member => {
-        const balance = memberBalances.get(member.id) ?? 0;
+        const balanceInfo = memberBalances.get(member.id);
+        const finalBalance = balanceInfo?.finalBalance ?? 0;
+        
         return {
             'Nama Anggota': member.name,
-            'Saldo Personal': formatCurrency(balance),
-            'Status': balance < 0 ? `Tunggakan ${formatCurrency(Math.abs(balance))}` : 'Lunas / Sisa Saldo'
+            'Saldo Personal': formatCurrency(finalBalance),
+            'Status': finalBalance < 0 ? `Tunggakan` : 'Sisa Kas'
         };
     });
     exportToXLSX(dataToExport, 'Laporan_Anggota_Kelas', 'Anggota');
@@ -263,7 +271,8 @@ export default function MemberManager({ initialMembers, transactions, cashierDay
             </TableHeader>
             <TableBody>
               {members.map((member) => {
-                const balance = memberBalances.get(member.id) ?? 0;
+                const balanceInfo = memberBalances.get(member.id);
+                const balance = balanceInfo?.finalBalance ?? 0;
                 const isSelected = selectedMembers.includes(member.id);
                 return (
                   <TableRow key={member.id} data-state={isSelected ? "selected" : ""}>
@@ -365,3 +374,5 @@ export default function MemberManager({ initialMembers, transactions, cashierDay
     </Card>
   );
 }
+
+    
