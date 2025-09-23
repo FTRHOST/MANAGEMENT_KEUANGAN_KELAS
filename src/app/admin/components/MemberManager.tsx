@@ -159,7 +159,7 @@ export default function MemberManager({ initialMembers, transactions, cashierDay
   };
 
   const memberBalances = useMemo(() => {
-    const balances = new Map<string, { finalBalance: number; status: string }>();
+    const balances = new Map<string, { unpaidDues: number; withdrawableBalance: number }>();
     const duesPerMeeting = settings.duesAmount || 0;
     const totalMemberCount = members.length > 0 ? members.length : 1;
     
@@ -169,28 +169,22 @@ export default function MemberManager({ initialMembers, transactions, cashierDay
     const sharedExpensePerMember = sharedExpensesTotal / totalMemberCount;
 
     members.forEach(member => {
-      // Total Iuran Wajib
-      const totalDuesLiability = cashierDays.length * duesPerMeeting;
-
-      // Total Pembayaran
       const totalPaid = transactions
         .filter(t => t.type === 'Pemasukan' && t.memberId === member.id)
         .reduce((sum, t) => sum + t.amount, 0);
 
-      // Total Pengeluaran Pribadi
+      const totalDuesLiability = cashierDays.length * duesPerMeeting;
+
       const personalExpensesTotal = transactions
         .filter(t => t.type === 'Pengeluaran' && t.memberId === member.id)
         .reduce((sum, t) => sum + t.amount, 0);
-
-      // Total Beban Pengeluaran (Pribadi + Bersama)
+        
       const totalExpenses = personalExpensesTotal + sharedExpensePerMember;
       
-      // Saldo Akhir
-      const finalBalance = totalPaid - totalDuesLiability - totalExpenses;
+      const unpaidDuesAmount = Math.max(0, totalDuesLiability - totalPaid);
+      const withdrawableBalance = Math.max(0, totalPaid - totalExpenses);
       
-      const status = finalBalance < 0 ? 'Tunggakan' : 'Sisa Kas';
-
-      balances.set(member.id, { finalBalance, status });
+      balances.set(member.id, { unpaidDues: unpaidDuesAmount, withdrawableBalance });
     });
     return balances;
   }, [members, transactions, cashierDays, settings]);
@@ -198,12 +192,10 @@ export default function MemberManager({ initialMembers, transactions, cashierDay
   const handleExport = () => {
     const dataToExport = members.map(member => {
         const balanceInfo = memberBalances.get(member.id);
-        const finalBalance = balanceInfo?.finalBalance ?? 0;
-        
         return {
             'Nama Anggota': member.name,
-            'Saldo Personal': formatCurrency(finalBalance),
-            'Status': finalBalance < 0 ? `Tunggakan` : 'Sisa Kas'
+            'Total Tunggakan': formatCurrency(balanceInfo?.unpaidDues ?? 0),
+            'Sisa Kas (Dapat Ditarik)': formatCurrency(balanceInfo?.withdrawableBalance ?? 0),
         };
     });
     exportToXLSX(dataToExport, 'Laporan_Anggota_Kelas', 'Anggota');
@@ -215,7 +207,7 @@ export default function MemberManager({ initialMembers, transactions, cashierDay
       <CardHeader>
         <CardTitle>Manajemen Anggota</CardTitle>
         <CardDescription>
-          Tambah, edit, atau hapus anggota. Saldo personal menunjukkan sisa uang atau tunggakan (jika negatif) dari setiap anggota.
+          Tambah, edit, atau hapus anggota. Lihat rincian tunggakan iuran dan sisa kas setiap anggota.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -264,16 +256,16 @@ export default function MemberManager({ initialMembers, transactions, cashierDay
                     />
                 </TableHead>
                 <TableHead>Nama Anggota</TableHead>
-                <TableHead>Status Saldo</TableHead>
-                <TableHead>Jumlah</TableHead>
+                <TableHead>Total Tunggakan</TableHead>
+                <TableHead>Sisa Kas (Dapat Ditarik)</TableHead>
                 <TableHead className="text-right">Aksi</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {members.map((member) => {
                 const balanceInfo = memberBalances.get(member.id);
-                const finalBalance = balanceInfo?.finalBalance ?? 0;
-                const status = balanceInfo?.status ?? 'Sisa Kas';
+                const unpaidDues = balanceInfo?.unpaidDues ?? 0;
+                const withdrawableBalance = balanceInfo?.withdrawableBalance ?? 0;
                 const isSelected = selectedMembers.includes(member.id);
                 return (
                   <TableRow key={member.id} data-state={isSelected ? "selected" : ""}>
@@ -285,11 +277,11 @@ export default function MemberManager({ initialMembers, transactions, cashierDay
                         />
                     </TableCell>
                     <TableCell className="font-medium">{member.name}</TableCell>
-                    <TableCell className={finalBalance >= 0 ? 'text-green-600' : 'text-destructive'}>
-                        {status}
+                    <TableCell className={unpaidDues > 0 ? 'text-destructive font-semibold' : ''}>
+                      {formatCurrency(unpaidDues)}
                     </TableCell>
-                    <TableCell className={finalBalance >= 0 ? 'text-green-600 font-semibold' : 'text-destructive font-semibold'}>
-                      {formatCurrency(Math.abs(finalBalance))}
+                    <TableCell className={withdrawableBalance > 0 ? 'text-green-600 font-semibold' : ''}>
+                      {formatCurrency(withdrawableBalance)}
                     </TableCell>
                     <TableCell className="text-right">
                       <TooltipProvider>
@@ -378,3 +370,5 @@ export default function MemberManager({ initialMembers, transactions, cashierDay
     </Card>
   );
 }
+
+    
