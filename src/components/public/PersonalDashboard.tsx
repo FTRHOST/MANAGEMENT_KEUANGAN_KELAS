@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useMemo } from 'react';
@@ -96,7 +95,7 @@ const DuesList = ({ paidDues, unpaidDues, duesAmount }: { paidDues: CashierDay[]
 );
 
 // Sub-component for Expenses List
-const ExpensesList = ({ personalExpenses, sharedExpensePerMember }: { personalExpenses: Transaction[], sharedExpensePerMember: number }) => (
+const ExpensesList = ({ personalExpenses, sharedTransactions, sharedExpensePerMember, totalMembers }: { personalExpenses: Transaction[], sharedTransactions: (Transaction & { displayAmount?: number })[], sharedExpensePerMember: number, totalMembers: number }) => (
      <AccordionItem value="expenses">
         <AccordionTrigger>
              <div className="flex items-center gap-3">
@@ -123,11 +122,25 @@ const ExpensesList = ({ personalExpenses, sharedExpensePerMember }: { personalEx
                     </div>
                 )}
                  <div>
-                    <h4 className="font-semibold mb-1">Beban Pengeluaran Bersama</h4>
-                    <div className="flex justify-between items-center py-2">
-                        <span>Kontribusi untuk semua pengeluaran kelas</span>
-                        <span className="font-medium">{formatCurrency(sharedExpensePerMember)}</span>
+                    <div className="flex justify-between items-center">
+                        <h4 className="font-semibold">Beban Pengeluaran Bersama</h4>
+                        <span className="font-semibold">{formatCurrency(sharedExpensePerMember)}</span>
                     </div>
+                    {sharedTransactions && sharedTransactions.length > 0 ? (
+                        <ul className="divide-y divide-border text-sm mt-1">
+                            {sharedTransactions.map(tx => (
+                                <li key={tx.id} className="flex justify-between items-center py-2">
+                                    <div className="text-muted-foreground">
+                                        <span>{tx.description}</span>
+                                        {totalMembers > 0 && <span className="text-xs block opacity-80">({formatCurrency(tx.displayAmount || tx.amount)} / {totalMembers} orang)</span>}
+                                    </div>
+                                    <span className="font-medium text-muted-foreground">{totalMembers > 0 ? formatCurrency((tx.displayAmount || tx.amount) / totalMembers) : formatCurrency(0)}</span>
+                                </li>
+                            ))}
+                        </ul>
+                    ) : (
+                        <p className="text-sm text-muted-foreground text-center py-3">Tidak ada pengeluaran bersama.</p>
+                    )}
                 </div>
             </div>
         </AccordionContent>
@@ -150,6 +163,7 @@ export function PersonalDashboard({
     unpaidDuesAmount,
     withdrawableBalance,
     personalExpenses,
+    sharedTransactions,
     sharedExpensePerMember,
     paidDues,
     unpaidDues
@@ -194,13 +208,25 @@ export function PersonalDashboard({
     const personalExpensesTotal = personalExpenses.reduce((sum, t) => sum + t.amount, 0);
 
     // Total pengeluaran bersama dibagi rata
-    const sharedExpensesTotal = allTransactions
-      .filter(t => t.type === 'Pengeluaran' && !t.memberId)
-      .reduce((sum, t) => sum + t.amount, 0);
+    const rawSharedTransactions = allTransactions.filter(t => t.type === 'Pengeluaran' && !t.memberId);
+    const sharedExpensesTotal = rawSharedTransactions.reduce((sum, t) => sum + Math.abs(t.amount), 0);
     const sharedExpensePerMember = totalMembers > 0 ? sharedExpensesTotal / totalMembers : 0;
 
+    // Group shared transactions for display in the accordion
+    const sharedTransactionMap = new Map<string, Transaction & { displayAmount?: number }>();
+    rawSharedTransactions.forEach(t => {
+      const key = t.batchId || t.id;
+      const existing = sharedTransactionMap.get(key);
+      if (existing) {
+        existing.displayAmount = (existing.displayAmount || existing.amount) + t.amount;
+      } else {
+        sharedTransactionMap.set(key, { ...t, displayAmount: t.amount });
+      }
+    });
+    const sharedTransactions = Array.from(sharedTransactionMap.values()).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
     // Total semua beban pengeluaran
-    const totalExpenses = personalExpensesTotal + sharedExpensePerMember;
+    const totalExpenses = Math.abs(personalExpensesTotal) + sharedExpensePerMember;
 
     // Sisa kas yang dapat ditarik
     const withdrawableBalance = Math.max(0, totalPaid - totalExpenses);
@@ -211,6 +237,7 @@ export function PersonalDashboard({
       unpaidDuesAmount,
       withdrawableBalance,
       personalExpenses,
+      sharedTransactions,
       sharedExpensePerMember,
       paidDues: paidDues.reverse(), // Show latest paid first
       unpaidDues
@@ -298,7 +325,7 @@ export function PersonalDashboard({
                 </div>
                  <Accordion type="multiple" className="w-full">
                    <DuesList paidDues={paidDues} unpaidDues={unpaidDues} duesAmount={duesPerMeeting} />
-                   <ExpensesList personalExpenses={personalExpenses} sharedExpensePerMember={sharedExpensePerMember} />
+                   <ExpensesList personalExpenses={personalExpenses} sharedTransactions={sharedTransactions} sharedExpensePerMember={sharedExpensePerMember} totalMembers={totalMembers} />
                 </Accordion>
             </CardContent>
         </Card>

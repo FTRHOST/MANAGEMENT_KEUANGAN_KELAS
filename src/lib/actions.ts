@@ -34,7 +34,7 @@ export async function getSettings(): Promise<Settings> {
 
     const settings: Settings = {
         appName: data.appName || 'Class Cashier',
-        logoUrl: data.logoUrl || '',
+        logoUrl: data.logoUrl || '/favicon.png',
         duesAmount,
         duesFrequency: data.duesFrequency || 'weekly',
         startDate: startDate,
@@ -47,7 +47,7 @@ export async function getSettings(): Promise<Settings> {
   // Default settings if the document doesn't exist
   return {
     appName: 'Class Cashier',
-    logoUrl: '',
+    logoUrl: '/favicon.png',
     duesAmount: 2000,
     duesFrequency: 'weekly',
     startDate: null,

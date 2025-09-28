@@ -45,7 +45,7 @@ export default function Dashboard({
 
     const totalExpenses = transactions
       .filter((t) => t.type === 'Pengeluaran')
-      .reduce((sum, t) => sum + t.amount, 0);
+      .reduce((sum, t) => sum + Math.abs(t.amount), 0);
 
     const finalBalance = totalIncome - totalExpenses;
     const totalMembers = members.length;
@@ -55,7 +55,7 @@ export default function Dashboard({
       .reduce((sum, t) => sum + t.amount, 0);
     const treasurer1Expenses = transactions
       .filter((t) => t.type === 'Pengeluaran' && t.treasurer === 'Bendahara 1')
-      .reduce((sum, t) => sum + t.amount, 0);
+      .reduce((sum, t) => sum + Math.abs(t.amount), 0);
     const treasurer1Balance = treasurer1Income - treasurer1Expenses;
 
     const treasurer2Income = transactions
@@ -63,7 +63,7 @@ export default function Dashboard({
       .reduce((sum, t) => sum + t.amount, 0);
     const treasurer2Expenses = transactions
         .filter((t) => t.type === 'Pengeluaran' && t.treasurer === 'Bendahara 2')
-        .reduce((sum, t) => sum + t.amount, 0);
+        .reduce((sum, t) => sum + Math.abs(t.amount), 0);
     const treasurer2Balance = treasurer2Income - treasurer2Expenses;
 
     return { totalIncome, totalExpenses, finalBalance, totalMembers, treasurer1Balance, treasurer2Balance };

@@ -1,10 +1,10 @@
-
 "use client";
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
+import { v4 as uuidv4 } from 'uuid';
 import {
   Table,
   TableBody,
@@ -94,7 +94,6 @@ const transactionSchema = z.object({
   treasurer: z.enum(['Bendahara 1', 'Bendahara 2']).optional(),
   applyToAll: z.boolean().optional(),
 }).refine(data => {
-    // Member is mandatory for "Pemasukan" unless applyToAll is true
     if (data.type === 'Pemasukan' && !data.applyToAll) {
         return !!data.memberId;
     }
@@ -112,35 +111,80 @@ type TransactionManagerProps = {
 
 export default function TransactionManager({ initialTransactions, members, isReadOnly }: TransactionManagerProps) {
   const { toast } = useToast();
-  const [transactions, setTransactions] = useState(initialTransactions);
   const [isSubmitting, setSubmitting] = useState(false);
   const [isDialogOpen, setDialogOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [selectedTransactions, setSelectedTransactions] = useState<string[]>([]);
   
+  // State for combined treasurer payment
+  const [paymentSource, setPaymentSource] = useState('Bendahara 1');
+  const [amount1, setAmount1] = useState(0);
+  const [amount2, setAmount2] = useState(0);
+
   const form = useForm<z.infer<typeof transactionSchema>>({
     resolver: zodResolver(transactionSchema),
     defaultValues: { type: 'Pemasukan', description: '', applyToAll: false },
   });
 
   const transactionType = form.watch('type');
-  const applyToAll = form.watch('applyToAll');
+  const totalAmount = form.watch('amount') || 0;
+
+  const { balanceBendahara1, balanceBendahara2 } = useMemo(() => {
+    const treasurer1Income = initialTransactions
+      .filter((t) => t.type === 'Pemasukan' && t.treasurer === 'Bendahara 1')
+      .reduce((sum, t) => sum + t.amount, 0);
+    const treasurer1Expenses = initialTransactions
+      .filter((t) => t.type === 'Pengeluaran' && t.treasurer === 'Bendahara 1')
+      .reduce((sum, t) => sum + Math.abs(t.amount), 0);
+    const balanceBendahara1 = treasurer1Income - treasurer1Expenses;
+
+    const treasurer2Income = initialTransactions
+      .filter((t) => t.type === 'Pemasukan' && t.treasurer === 'Bendahara 2')
+      .reduce((sum, t) => sum + t.amount, 0);
+    const treasurer2Expenses = initialTransactions
+        .filter((t) => t.type === 'Pengeluaran' && t.treasurer === 'Bendahara 2')
+        .reduce((sum, t) => sum + Math.abs(t.amount), 0);
+    const balanceBendahara2 = treasurer2Income - treasurer2Expenses;
+
+    return { balanceBendahara1, balanceBendahara2 };
+  }, [initialTransactions]);
+
+  useEffect(() => {
+    // Smartly pre-fill split amounts for new expense transactions
+    if (transactionType === 'Pengeluaran' && !editingTransaction) {
+        if (paymentSource === 'Bendahara 1') {
+            setAmount1(totalAmount);
+            setAmount2(0);
+        } else if (paymentSource === 'Bendahara 2') {
+            setAmount1(0);
+            setAmount2(totalAmount);
+        } else if (paymentSource === 'Manual') {
+            // Auto-split suggestion: take all from B1, then remainder from B2
+            const fromB1 = Math.min(totalAmount, balanceBendahara1);
+            const fromB2 = totalAmount - fromB1;
+            setAmount1(fromB1);
+            setAmount2(fromB2);
+        }
+    } else {
+        setAmount1(0);
+        setAmount2(0);
+    }
+  }, [totalAmount, paymentSource, transactionType, balanceBendahara1, editingTransaction]);
 
   const groupedTransactions = useMemo(() => {
-    const transactionMap = new Map<string, Transaction & { memberCount?: number; totalAmount?: number }>();
+    const transactionMap = new Map<string, Transaction & { memberCount?: number; totalAmount?: number, subTransactions?: Transaction[] }>();
 
     initialTransactions.forEach(t => {
       if (t.batchId) {
         const existing = transactionMap.get(t.batchId);
         if (existing) {
           existing.memberCount = (existing.memberCount || 1) + 1;
-          existing.totalAmount = (existing.totalAmount || existing.amount) + t.amount;
+          existing.totalAmount = (existing.totalAmount || 0) + t.amount;
+          if(existing.subTransactions) existing.subTransactions.push(t);
         } else {
-          // This is the first transaction of the batch we've seen
-          transactionMap.set(t.batchId, { ...t, memberCount: 1, totalAmount: t.amount });
+          transactionMap.set(t.batchId, { ...t, memberCount: 1, totalAmount: t.amount, subTransactions: [t] });
         }
       } else {
-        // Individual transaction, use its own ID as the key
         transactionMap.set(t.id, t);
       }
     });
@@ -149,17 +193,19 @@ export default function TransactionManager({ initialTransactions, members, isRea
   }, [initialTransactions]);
 
   const handleDialogOpen = (transaction: Transaction | null) => {
-    if (isReadOnly || (transaction?.batchId && !editingTransaction)) return;
+    if (isReadOnly || (transaction?.batchId && !transaction.subTransactions)) return;
     setEditingTransaction(transaction);
     if (transaction) {
       form.reset({
         ...transaction,
         amount: Math.abs(transaction.amount),
         date: new Date(transaction.date),
-        applyToAll: false, // Cannot edit bulk transactions this way
+        applyToAll: false, 
       });
+      setPaymentSource(transaction.treasurer || 'Bendahara 1');
     } else {
       form.reset({ type: 'Pemasukan', amount: 0, description: '', date: new Date(), memberId: undefined, treasurer: undefined, applyToAll: false });
+      setPaymentSource('Bendahara 1');
     }
     setDialogOpen(true);
   };
@@ -168,17 +214,49 @@ export default function TransactionManager({ initialTransactions, members, isRea
     setSubmitting(true);
     try {
       if (editingTransaction) {
-        // applyToAll is disabled for editing
-        const updateValues = { ...values };
+        const updateValues = { ...values, amount: values.type === 'Pengeluaran' ? -values.amount : values.amount };
         delete updateValues.applyToAll;
         await updateTransaction(editingTransaction.id, updateValues);
         toast({ title: 'Sukses', description: 'Transaksi berhasil diperbarui.' });
       } else {
-        await addTransaction(values);
-        toast({ title: 'Sukses', description: 'Transaksi baru berhasil ditambahkan.' });
+        if (values.type === 'Pengeluaran') {
+            if (paymentSource === 'Manual') {
+                if (amount1 + amount2 !== totalAmount) {
+                    toast({ variant: 'destructive', title: 'Error', description: 'Jumlah split tidak sesuai dengan total pengeluaran.' });
+                    setSubmitting(false);
+                    return;
+                }
+                if (amount1 > balanceBendahara1 || amount2 > balanceBendahara2) {
+                    toast({ variant: 'destructive', title: 'Error', description: 'Saldo bendahara tidak mencukupi.' });
+                    setSubmitting(false);
+                    return;
+                }
+                const batchId = uuidv4();
+                const promises = [];
+                if (amount1 > 0) {
+                    promises.push(addTransaction({ ...values, amount: -amount1, treasurer: 'Bendahara 1', batchId }));
+                }
+                if (amount2 > 0) {
+                    promises.push(addTransaction({ ...values, amount: -amount2, treasurer: 'Bendahara 2', batchId }));
+                }
+                await Promise.all(promises);
+                toast({ title: 'Sukses', description: 'Transaksi pengeluaran gabungan berhasil ditambahkan.' });
+            } else { // Single treasurer
+                const balance = paymentSource === 'Bendahara 1' ? balanceBendahara1 : balanceBendahara2;
+                if (totalAmount > balance) {
+                    toast({ variant: 'destructive', title: 'Error', description: `Saldo ${paymentSource} tidak mencukupi.` });
+                    setSubmitting(false);
+                    return;
+                }
+                await addTransaction({ ...values, amount: -values.amount, treasurer: paymentSource });
+                toast({ title: 'Sukses', description: 'Transaksi baru berhasil ditambahkan.' });
+            }
+        } else { // Pemasukan
+            await addTransaction({ ...values, treasurer: values.treasurer || 'Bendahara 1' });
+            toast({ title: 'Sukses', description: 'Transaksi baru berhasil ditambahkan.' });
+        }
       }
       setDialogOpen(false);
-      // Revalidation will refresh the list
     } catch (error: any) {
       toast({ variant: 'destructive', title: 'Error', description: error.message });
     }
@@ -186,12 +264,7 @@ export default function TransactionManager({ initialTransactions, members, isRea
   };
 
   const handleDelete = async (id: string, batchId?: string) => {
-    await deleteTransaction(id, batchId); // Pass batchId if it exists
-    if(batchId) {
-        setTransactions(transactions.filter(t => t.batchId !== batchId));
-    } else {
-        setTransactions(transactions.filter(t => t.id !== id));
-    }
+    await deleteTransaction(id, batchId);
     toast({ title: 'Sukses', description: 'Transaksi berhasil dihapus.' });
   };
   
@@ -217,7 +290,6 @@ export default function TransactionManager({ initialTransactions, members, isRea
 
         toast({ title: 'Sukses', description: `${selectedTransactions.length} item transaksi berhasil dihapus.` });
         setSelectedTransactions([]);
-        // Revalidation will refresh the data
     } catch (error) {
         toast({ variant: 'destructive', title: 'Error', description: 'Gagal menghapus transaksi yang dipilih.' });
     }
@@ -246,6 +318,34 @@ export default function TransactionManager({ initialTransactions, members, isRea
     }));
     exportToXLSX(dataToExport, 'Laporan_Transaksi_Kelas', 'Transaksi');
   };
+
+  const handleAmount1Change = (newAmount: number) => {
+    if (!isNaN(newAmount) && totalAmount >= newAmount) {
+        setAmount1(newAmount);
+        setAmount2(totalAmount - newAmount);
+    } else if (totalAmount < newAmount) {
+        setAmount1(totalAmount);
+        setAmount2(0);
+    } else {
+        setAmount1(0);
+        setAmount2(totalAmount);
+    }
+  }
+
+  const handleAmount2Change = (newAmount: number) => {
+    if (!isNaN(newAmount) && totalAmount >= newAmount) {
+        setAmount2(newAmount);
+        setAmount1(totalAmount - newAmount);
+    } else if (totalAmount < newAmount) {
+        setAmount2(totalAmount);
+        setAmount1(0);
+    } else {
+        setAmount2(0);
+        setAmount1(totalAmount);
+    }
+  }
+
+  const isManualSplitInvalid = paymentSource === 'Manual' && (amount1 + amount2 !== totalAmount || amount1 > balanceBendahara1 || amount2 > balanceBendahara2 || amount1 < 0 || amount2 < 0);
 
   return (
      <Card>
@@ -313,6 +413,7 @@ export default function TransactionManager({ initialTransactions, members, isRea
               {groupedTransactions.map((transaction) => {
                 const isSelected = selectedTransactions.includes(transaction.id);
                 const isBulk = !!transaction.batchId;
+                const isCombinedExpense = isBulk && transaction.type === 'Pengeluaran';
 
                 return (
                 <TableRow key={transaction.id} data-state={isSelected ? "selected" : ""}>
@@ -331,7 +432,21 @@ export default function TransactionManager({ initialTransactions, members, isRea
                     </Badge>
                   </TableCell>
                   <TableCell className="font-medium">
-                    {isBulk ? (
+                     {isCombinedExpense ? (
+                        <TooltipProvider>
+                            <Tooltip>
+                                <TooltipTrigger className="flex items-center gap-1 cursor-default">
+                                    {transaction.description} <Users className="h-3 w-3 text-muted-foreground"/>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                    <p>Pengeluaran gabungan:</p>
+                                    <ul className="list-disc pl-4">
+                                        {transaction.subTransactions?.map(st => <li key={st.id}>{st.treasurer}: {formatCurrency(st.amount)}</li>)}
+                                    </ul>
+                                </TooltipContent>
+                            </Tooltip>
+                        </TooltipProvider>
+                    ) : isBulk ? (
                         <TooltipProvider>
                             <Tooltip>
                                 <TooltipTrigger className="flex items-center gap-1 cursor-default">
@@ -357,9 +472,9 @@ export default function TransactionManager({ initialTransactions, members, isRea
                         </TooltipProvider>
                     )}
                   </TableCell>
-                  <TableCell>{transaction.treasurer || '-'}</TableCell>
+                  <TableCell>{isCombinedExpense ? 'Gabungan' : transaction.treasurer || '-'}</TableCell>
                   <TableCell className={`text-right font-semibold ${transaction.type === 'Pemasukan' ? 'text-green-600' : 'text-destructive'}`}>
-                    {transaction.type === 'Pemasukan' ? '+' : '-'} {formatCurrency(isBulk ? transaction.totalAmount! : transaction.amount)}
+                    {transaction.type === 'Pemasukan' ? '+' : '-'} {formatCurrency(Math.abs(isBulk ? transaction.totalAmount! : transaction.amount))}
                   </TableCell>
                   {!isReadOnly && (
                     <TableCell className="text-right">
@@ -374,7 +489,7 @@ export default function TransactionManager({ initialTransactions, members, isRea
                                   </span>
                                 </TooltipTrigger>
                                 <TooltipContent>
-                                  <p>Transaksi massal tidak dapat diedit.</p>
+                                  <p>Transaksi massal/gabungan tidak dapat diedit.</p>
                                 </TooltipContent>
                               </Tooltip>
                           ) : (
@@ -394,7 +509,7 @@ export default function TransactionManager({ initialTransactions, members, isRea
                             <AlertDialogTitle>Anda yakin?</AlertDialogTitle>
                             <AlertDialogDescription>
                               {isBulk 
-                                ? `Ini akan menghapus ${transaction.memberCount} transaksi terkait dari semua anggota.`
+                                ? `Ini akan menghapus semua transaksi terkait (${transaction.memberCount || transaction.subTransactions?.length}) dari operasi ini.`
                                 : "Tindakan ini tidak dapat dibatalkan. Ini akan menghapus data transaksi secara permanen."
                               }
                             </AlertDialogDescription>
@@ -410,7 +525,7 @@ export default function TransactionManager({ initialTransactions, members, isRea
                     </TableCell>
                   )}
                 </TableRow>
-              )})}
+              )})} 
             </TableBody>
           </Table>
         </div>
@@ -468,25 +583,23 @@ export default function TransactionManager({ initialTransactions, members, isRea
                     />
                 )}
 
-                {transactionType === 'Pemasukan' && !applyToAll && (
-                  <>
-                    <FormField
-                      control={form.control}
-                      name="memberId"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Nama Anggota</FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value}>
-                            <FormControl><SelectTrigger><SelectValue placeholder="Pilih anggota" /></SelectTrigger></FormControl>
-                            <SelectContent>
-                              {members.map(m => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </>
+                {transactionType === 'Pemasukan' && !form.watch('applyToAll') && (
+                  <FormField
+                    control={form.control}
+                    name="memberId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Nama Anggota</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value} disabled={!!editingTransaction}>
+                          <FormControl><SelectTrigger><SelectValue placeholder="Pilih anggota" /></SelectTrigger></FormControl>
+                          <SelectContent>
+                            {members.map(m => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                 )}
 
                 <FormField
@@ -508,15 +621,27 @@ export default function TransactionManager({ initialTransactions, members, isRea
                     )}
                 />
 
-                {(transactionType === 'Pemasukan' || transactionType === 'Pengeluaran') && (
+                <FormField
+                    control={form.control}
+                    name="amount"
+                    render={({ field }) => (
+                        <FormItem>
+                            <FormLabel>Jumlah</FormLabel>
+                            <FormControl>
+                                <Input type="number" placeholder="70000" {...field} onChange={e => field.onChange(e.target.valueAsNumber)} />
+                            </FormControl>
+                            <FormMessage />
+                        </FormItem>
+                    )}
+                />
+
+                {transactionType === 'Pemasukan' && (
                     <FormField
                       control={form.control}
                       name="treasurer"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>
-                            {transactionType === 'Pemasukan' ? 'Diterima oleh Bendahara' : 'Dibayar oleh Bendahara (Opsional)'}
-                          </FormLabel>
+                          <FormLabel>Diterima oleh Bendahara</FormLabel>
                           <Select onValueChange={field.onChange} defaultValue={field.value}>
                             <FormControl><SelectTrigger><SelectValue placeholder="Pilih bendahara" /></SelectTrigger></FormControl>
                             <SelectContent>
@@ -524,24 +649,59 @@ export default function TransactionManager({ initialTransactions, members, isRea
                                 <SelectItem value="Bendahara 2">Bendahara 2</SelectItem>
                             </SelectContent>
                           </Select>
-                           <p className="text-xs text-muted-foreground">
-                              Pilih bendahara yang mengelola transaksi ini.
-                           </p>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
                 )}
 
+                {transactionType === 'Pengeluaran' && !editingTransaction && (
+                    <div className="space-y-4 rounded-md border p-4">
+                        <FormLabel>Sumber Dana Pengeluaran</FormLabel>
+                        <RadioGroup onValueChange={setPaymentSource} defaultValue={paymentSource} className="flex space-x-4">
+                            <FormItem className="flex items-center space-x-2 space-y-0">
+                                <FormControl><RadioGroupItem value="Bendahara 1" /></FormControl>
+                                <FormLabel>Bendahara 1 <span className={cn('text-xs', totalAmount > balanceBendahara1 ? 'text-destructive' : 'text-muted-foreground')}>({formatCurrency(balanceBendahara1)})</span></FormLabel>
+                            </FormItem>
+                            <FormItem className="flex items-center space-x-2 space-y-0">
+                                <FormControl><RadioGroupItem value="Bendahara 2" /></FormControl>
+                                <FormLabel>Bendahara 2 <span className={cn('text-xs', totalAmount > balanceBendahara2 ? 'text-destructive' : 'text-muted-foreground')}>({formatCurrency(balanceBendahara2)})</span></FormLabel>
+                            </FormItem>
+                             <FormItem className="flex items-center space-x-2 space-y-0">
+                                <FormControl><RadioGroupItem value="Manual" /></FormControl>
+                                <FormLabel>Kombinasi</FormLabel>
+                            </FormItem>
+                        </RadioGroup>
+                        {paymentSource === 'Manual' && (
+                            <div className="grid grid-cols-2 gap-4 pt-2">
+                                <FormItem>
+                                    <FormLabel>Dari Bendahara 1</FormLabel>
+                                    <FormControl>
+                                        <Input type="number" value={amount1} onChange={e => handleAmount1Change(e.target.valueAsNumber || 0)} max={balanceBendahara1} />
+                                    </FormControl>
+                                    {amount1 > balanceBendahara1 && <p className="text-xs text-destructive pt-1">Saldo tidak cukup.</p>}
+                                </FormItem>
+                                <FormItem>
+                                    <FormLabel>Dari Bendahara 2</FormLabel>
+                                    <FormControl>
+                                        <Input type="number" value={amount2} onChange={e => handleAmount2Change(e.target.valueAsNumber || 0)} max={balanceBendahara2} />
+                                    </FormControl>
+                                    {amount2 > balanceBendahara2 && <p className="text-xs text-destructive pt-1">Saldo tidak cukup.</p>}
+                                </FormItem>
+                                {totalAmount > 0 && amount1 + amount2 !== totalAmount && <p className="col-span-2 text-xs text-destructive pt-1">Total split ({formatCurrency(amount1+amount2)}) tidak sama dengan jumlah pengeluaran ({formatCurrency(totalAmount)}).</p>}
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 {transactionType === 'Pengeluaran' && (
-                  <>
                     <FormField
                       control={form.control}
                       name="memberId"
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Dibebankan ke (Opsional)</FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <Select onValueChange={field.onChange} defaultValue={field.value} disabled={!!editingTransaction}>
                             <FormControl><SelectTrigger><SelectValue placeholder="Pilih anggota jika pengeluaran pribadi" /></SelectTrigger></FormControl>
                             <SelectContent>
                               {members.map(m => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}
@@ -554,23 +714,7 @@ export default function TransactionManager({ initialTransactions, members, isRea
                         </FormItem>
                       )}
                     />
-                  </>
                 )}
-
-
-                <FormField
-                    control={form.control}
-                    name="amount"
-                    render={({ field }) => (
-                        <FormItem>
-                            <FormLabel>Jumlah</FormLabel>
-                            <FormControl>
-                                <Input type="number" placeholder="70000" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                        </FormItem>
-                    )}
-                />
                 
                 <FormField
                   control={form.control}
@@ -601,7 +745,7 @@ export default function TransactionManager({ initialTransactions, members, isRea
 
                 <DialogFooter>
                     <DialogClose asChild><Button type="button" variant="secondary">Batal</Button></DialogClose>
-                    <Button type="submit" disabled={isSubmitting}>
+                    <Button type="submit" disabled={isSubmitting || (transactionType === 'Pengeluaran' && !editingTransaction && isManualSplitInvalid)}>
                         {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                         {editingTransaction ? 'Simpan Perubahan' : 'Tambah'}
                     </Button>
