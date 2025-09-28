@@ -166,7 +166,7 @@ export default function MemberManager({ initialMembers, transactions, cashierDay
     
     const sharedExpensesTotal = transactions
       .filter((t) => t.type === 'Pengeluaran' && !t.memberId)
-      .reduce((sum, t) => sum + t.amount, 0);
+      .reduce((sum, t) => sum + Math.abs(t.amount), 0);
     const sharedExpensePerMember = sharedExpensesTotal / totalMemberCount;
 
     members.forEach(member => {
@@ -180,7 +180,7 @@ export default function MemberManager({ initialMembers, transactions, cashierDay
         .filter(t => t.type === 'Pengeluaran' && t.memberId === member.id)
         .reduce((sum, t) => sum + t.amount, 0);
         
-      const totalExpenses = personalExpensesTotal + sharedExpensePerMember;
+      const totalExpenses = Math.abs(personalExpensesTotal) + sharedExpensePerMember;
       
       const unpaidDuesAmount = Math.max(0, totalDuesLiability - totalPaid);
       const withdrawableBalance = Math.max(0, totalPaid - totalExpenses);
