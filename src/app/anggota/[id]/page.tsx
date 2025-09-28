@@ -4,7 +4,6 @@ import { db } from '@/lib/firebase';
 import type { Member, Transaction } from '@/lib/types';
 import { PersonalDashboard } from '@/components/public/PersonalDashboard';
 import { notFound } from 'next/navigation';
-import { ClassFinanceSummary } from '@/components/public/ClassFinanceSummary';
 import { getCashierDays, getSettings } from '@/lib/actions';
 
 async function getData(memberId: string) {
@@ -54,7 +53,6 @@ export default async function AnggotaPage({ params }: { params: { id: string } }
         settings={settings}
         totalMembers={totalMembers}
       />
-      <ClassFinanceSummary transactions={transactions} />
     </div>
   );
 }

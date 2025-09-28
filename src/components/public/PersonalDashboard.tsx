@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import type { Member, Transaction, CashierDay, Settings } from '@/lib/types';
-import { Wallet, PiggyBank, MinusCircle, TrendingDown, ArrowRight, CheckCircle2, XCircle, FileText } from 'lucide-react';
+import { Wallet, PiggyBank, MinusCircle, TrendingDown, ArrowRight, CheckCircle2, XCircle, FileText, ArrowUpCircle, ArrowDownCircle, Scale } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 
 function formatCurrency(amount: number) {
@@ -166,8 +166,23 @@ export function PersonalDashboard({
     sharedTransactions,
     sharedExpensePerMember,
     paidDues,
-    unpaidDues
+    unpaidDues,
+    totalClassIncome,
+    totalClassExpenses,
+    classFinalBalance,
   } = useMemo(() => {
+    // Class-wide calculations
+    const totalClassIncome = allTransactions
+      .filter(t => t.type === 'Pemasukan')
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    const totalClassExpenses = allTransactions
+      .filter(t => t.type === 'Pengeluaran')
+      .reduce((sum, t) => sum + Math.abs(t.amount), 0);
+      
+    const classFinalBalance = totalClassIncome - totalClassExpenses;
+
+    // Personal calculations for the logged-in member
     // Total uang yang sudah dibayar anggota
     const totalPaid = allTransactions
       .filter(t => t.memberId === member.id && t.type === 'Pemasukan')
@@ -240,61 +255,100 @@ export function PersonalDashboard({
       sharedTransactions,
       sharedExpensePerMember,
       paidDues: paidDues.reverse(), // Show latest paid first
-      unpaidDues
+      unpaidDues,
+      totalClassIncome,
+      totalClassExpenses,
+      classFinalBalance,
     };
   }, [member.id, allTransactions, cashierDays, totalMembers, duesPerMeeting]);
 
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
        <div className="text-center">
             <h1 className="text-3xl font-bold font-headline">Halo, {member.name}!</h1>
             <p className="text-muted-foreground">Ini adalah ringkasan keuangan pribadimu di kelas.</p>
         </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Tunggakan Iuran</CardTitle>
-            <MinusCircle className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-destructive">
-              {formatCurrency(unpaidDuesAmount)}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Total iuran wajib yang belum dibayar.
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Beban Pengeluaran</CardTitle>
-            <TrendingDown className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {formatCurrency(totalExpenses)}
-            </div>
-             <p className="text-xs text-muted-foreground">
-              Pengeluaran pribadi & bagian pengeluaran bersama.
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Sisa Kas (Dapat Ditarik)</CardTitle>
-            <Wallet className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">
-                {formatCurrency(withdrawableBalance)}
-            </div>
-             <p className="text-xs text-muted-foreground">
-              Sisa uang setelah dikurangi semua beban pengeluaran.
-            </p>
-          </CardContent>
-        </Card>
+      <div>
+        <h2 className="text-2xl font-bold text-center mb-4 font-headline">Ringkasan Keuangan Kelas</h2>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total Pemasukan Kelas</CardTitle>
+                <ArrowUpCircle className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-green-600">{formatCurrency(totalClassIncome)}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total Pengeluaran Kelas</CardTitle>
+                <ArrowDownCircle className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-destructive">{formatCurrency(totalClassExpenses)}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Saldo Kas Kelas</CardTitle>
+                <Scale className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{formatCurrency(classFinalBalance)}</div>
+              </CardContent>
+            </Card>
+        </div>
+      </div>
+
+      <div>
+        <h2 className="text-2xl font-bold text-center mb-4 font-headline">Ringkasan Keuangan Pribadi</h2>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Tunggakan Iuran</CardTitle>
+              <MinusCircle className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-destructive">
+                {formatCurrency(unpaidDuesAmount)}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Total iuran wajib yang belum dibayar.
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Beban Pengeluaran</CardTitle>
+              <TrendingDown className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {formatCurrency(totalExpenses)}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Pengeluaran pribadi & bagian pengeluaran bersama.
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Sisa Kas (Dapat Ditarik)</CardTitle>
+              <Wallet className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-green-600">
+                  {formatCurrency(withdrawableBalance)}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Sisa uang setelah dikurangi semua beban pengeluaran.
+              </p>
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
        <Card>
@@ -303,26 +357,6 @@ export function PersonalDashboard({
                 <CardDescription>Detail dari semua iuran, pengeluaran, dan pembayaran Anda.</CardDescription>
             </CardHeader>
             <CardContent>
-                <div className="grid md:grid-cols-2 gap-6 mb-6">
-                    <div className="flex items-center gap-4 p-4 rounded-lg bg-gray-50 dark:bg-muted/30">
-                        <div className="p-3 rounded-full bg-green-100 dark:bg-green-500/20">
-                            <PiggyBank className="h-6 w-6 text-green-600 dark:text-green-400" />
-                        </div>
-                        <div>
-                            <p className="text-sm text-muted-foreground">Total Kas Masuk</p>
-                            <p className="text-xl font-bold">{formatCurrency(totalPaid)}</p>
-                        </div>
-                    </div>
-                     <div className="flex items-center gap-4 p-4 rounded-lg bg-gray-50 dark:bg-muted/30">
-                        <div className="p-3 rounded-full bg-red-100 dark:bg-red-500/20">
-                            <TrendingDown className="h-6 w-6 text-red-600 dark:text-red-400" />
-                        </div>
-                        <div>
-                            <p className="text-sm text-muted-foreground">Total Beban Pengeluaran</p>
-                            <p className="text-xl font-bold">{formatCurrency(totalExpenses)}</p>
-                        </div>
-                    </div>
-                </div>
                  <Accordion type="multiple" className="w-full">
                    <DuesList paidDues={paidDues} unpaidDues={unpaidDues} duesAmount={duesPerMeeting} />
                    <ExpensesList personalExpenses={personalExpenses} sharedTransactions={sharedTransactions} sharedExpensePerMember={sharedExpensePerMember} totalMembers={totalMembers} />
