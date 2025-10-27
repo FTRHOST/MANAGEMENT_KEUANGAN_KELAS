@@ -13,6 +13,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  TableFooter,
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import {
@@ -447,25 +448,7 @@ export default function TransactionManager({ initialTransactions, members, isRea
                   />
                 </PopoverContent>
               </Popover>
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 flex-1">
-                <Card>
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Total Pemasukan</CardTitle>
-                    <ArrowUpCircle className="h-4 w-4 text-muted-foreground" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold text-green-600">{formatCurrency(totalIncome)}</div>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Total Pengeluaran</CardTitle>
-                    <ArrowDownCircle className="h-4 w-4 text-muted-foreground" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold text-destructive">{formatCurrency(totalExpenses)}</div>
-                  </CardContent>
-                </Card>
+              <div className="grid grid-cols-2 lg:grid-cols-2 gap-4 flex-1">
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-sm font-medium">Total Saldo (B1)</CardTitle>
@@ -662,6 +645,16 @@ export default function TransactionManager({ initialTransactions, members, isRea
                 </TableRow>
               )})} 
             </TableBody>
+            <TableFooter>
+                <TableRow>
+                    <TableCell colSpan={5} className="font-bold text-right">Total Periode Ini:</TableCell>
+                    <TableCell className="text-right">
+                        <div className="font-semibold text-green-600">+{formatCurrency(totalIncome)}</div>
+                        <div className="font-semibold text-destructive">-{formatCurrency(totalExpenses)}</div>
+                    </TableCell>
+                    {!isReadOnly && <TableCell></TableCell>}
+                </TableRow>
+            </TableFooter>
           </Table>
         </div>
 
@@ -894,3 +887,4 @@ export default function TransactionManager({ initialTransactions, members, isRea
   );
 }
 
+    
