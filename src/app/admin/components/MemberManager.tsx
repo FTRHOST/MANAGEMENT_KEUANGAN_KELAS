@@ -47,7 +47,7 @@ import { useToast } from '@/hooks/use-toast';
 import { addMember, updateMember, deleteMember } from '@/lib/actions';
 import type { Member, Transaction, CashierDay, Settings } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { PlusCircle, Edit, Trash2, Loader2, Ban, FileDown, ArrowUpDown } from 'lucide-react';
+import { PlusCircle, Edit, Trash2, Loader2, Ban, FileDown, ArrowUpDown, ClipboardCopy } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { exportToXLSX } from '@/lib/export';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -159,6 +159,19 @@ export default function MemberManager({ initialMembers, transactions, cashierDay
     } catch (error: any) {
         toast({ variant: 'destructive', title: 'Error', description: 'Gagal menghapus anggota yang dipilih.' });
     }
+  };
+
+  const handleCopyMemberInfo = (member: MemberWithBalance) => {
+    const formattedDues = formatCurrency(member.unpaidDues);
+    const textToCopy = member.unpaidDues > 0
+      ? `Pengingat Iuran Kas untuk ${member.name}: Total tunggakan Anda saat ini adalah ${formattedDues}. Terima kasih!`
+      : `${member.name} tidak memiliki tunggakan kas. Terima kasih!`;
+
+    navigator.clipboard.writeText(textToCopy).then(() => {
+        toast({ title: 'Info disalin!', description: `Pengingat untuk ${member.name} berhasil disalin.` });
+    }).catch(err => {
+        toast({ variant: 'destructive', title: 'Gagal menyalin', description: 'Tidak dapat menyalin teks ke clipboard.' });
+    });
   };
 
   const toggleSelectMember = (id: string) => {
@@ -355,6 +368,16 @@ export default function MemberManager({ initialMembers, transactions, cashierDay
                     {!isReadOnly && (
                       <TableCell className="text-right">
                         <TooltipProvider>
+                           <Tooltip>
+                            <TooltipTrigger asChild>
+                               <Button variant="ghost" size="icon" onClick={() => handleCopyMemberInfo(member)}>
+                                  <ClipboardCopy className="h-4 w-4" />
+                               </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Salin info tunggakan</p>
+                            </TooltipContent>
+                          </Tooltip>
                           <Button variant="ghost" size="icon" onClick={() => handleDialogOpen(member)}>
                             <Edit className="h-4 w-4" />
                           </Button>

@@ -171,7 +171,9 @@ export default function CashierDayManager({ initialCashierDays, isReadOnly }: Ca
     const date = new Date(day.date);
     const dayAndDate = format(date, 'EEEE, d MMMM yyyy', { locale: id });
     const formattedAmount = formatCurrency(day.duesAmount || 0);
-    const textToCopy = `*✨ INFO KAS MINGGUAN ✨*
+    const descriptionText = day.description ? ` (${day.description})` : '';
+
+    const textToCopy = `*✨ INFO KAS MINGGUAN${descriptionText} ✨*
 Halo semua, sekadar mengingatkan untuk iuran kas besok ya!
 
 🗓️ Hari: *${dayAndDate}*
