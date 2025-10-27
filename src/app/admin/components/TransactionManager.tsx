@@ -58,8 +58,8 @@ import { useToast } from '@/hooks/use-toast';
 import { addTransaction, updateTransaction, deleteTransaction } from '@/lib/actions';
 import type { Member, Transaction } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { PlusCircle, Edit, Trash2, Loader2, CalendarIcon, Users, FileDown, Ban, ArrowUpCircle, ArrowDownCircle, Wallet } from 'lucide-react';
-import { format, addDays } from 'date-fns';
+import { PlusCircle, Edit, Trash2, Loader2, CalendarIcon, Users, FileDown, Ban, RefreshCw } from 'lucide-react';
+import { format } from 'date-fns';
 import { id } from 'date-fns/locale';
 import type { DateRange } from 'react-day-picker';
 import { Badge } from '@/components/ui/badge';
@@ -404,6 +404,11 @@ export default function TransactionManager({ initialTransactions, members, isRea
         setAmount1(totalAmount);
     }
   }
+  
+  const resetFilters = () => {
+    setDate(undefined);
+    setTreasurerFilter('Semua');
+  };
 
   const isManualSplitInvalid = paymentSource === 'Manual' && (amount1 + amount2 !== totalAmount || amount1 > balanceBendahara1 || amount2 > balanceBendahara2 || amount1 < 0 || amount2 < 0);
 
@@ -415,14 +420,14 @@ export default function TransactionManager({ initialTransactions, members, isRea
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
-            <div className="flex flex-col sm:flex-row gap-4">
+            <div className="flex flex-wrap items-center gap-4">
               <Popover>
                 <PopoverTrigger asChild>
                   <Button
                     id="date"
                     variant={"outline"}
                     className={cn(
-                      "w-full sm:w-[300px] justify-start text-left font-normal",
+                      "w-full sm:w-auto lg:min-w-[250px] justify-start text-left font-normal",
                       !date && "text-muted-foreground"
                     )}
                   >
@@ -463,6 +468,10 @@ export default function TransactionManager({ initialTransactions, members, isRea
                     <SelectItem value="Bendahara 2">Bendahara 2</SelectItem>
                   </SelectContent>
                 </Select>
+                 <Button onClick={resetFilters} variant="ghost">
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                    Tampilkan Semua
+                </Button>
             </div>
 
             <div className="flex justify-between items-center">
@@ -881,7 +890,3 @@ export default function TransactionManager({ initialTransactions, members, isRea
     </Card>
   );
 }
-
-    
-
-    
