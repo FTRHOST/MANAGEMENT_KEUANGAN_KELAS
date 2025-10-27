@@ -1,22 +1,13 @@
-"use client";
+"use client"
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
-import Link from 'next/link';
-import Image from 'next/image';
+import { useState, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent } from '@/components/ui/card';
+import { User, Search } from 'lucide-react';
 import type { Member, Settings } from '@/lib/types';
+import { ScrollArea } from '../ui/scroll-area';
 import { suggestSimilarNames } from '@/ai/flows/suggest-similar-names';
-import { Input } from '../ui/input';
-import { Search, Loader2 } from 'lucide-react';
-import { useDebounceValue } from 'usehooks-ts';
-import { Card, CardContent } from '../ui/card';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
 
 type HomePageProps = {
   members: Member[];
@@ -24,111 +15,117 @@ type HomePageProps = {
 };
 
 export default function HomePage({ members, settings }: HomePageProps) {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [suggestions, setSuggestions] = useState<string[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
-  const [debouncedSearchTerm] = useDebounceValue(searchTerm, 300);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
+  const [isLoadingAi, setLoadingAi] = useState(false);
+  const router = useRouter();
 
-  const allMemberNames = useMemo(() => members.map(m => m.name), [members]);
+  const filteredMembers = useMemo(() => {
+    if (!searchQuery) return [];
+    const lowercasedQuery = searchQuery.toLowerCase();
+    
+    const directMatches = members.filter(member =>
+      member.name.toLowerCase().includes(lowercasedQuery) ||
+      (member.nim && member.nim.toLowerCase().includes(lowercasedQuery))
+    );
 
-  const fetchSuggestions = useCallback(async () => {
-    if (debouncedSearchTerm.length < 3) {
-      setSuggestions([]);
-      return;
+    // If we have AI suggestions, filter members based on those names
+    if (aiSuggestions.length > 0) {
+        const suggestionSet = new Set(aiSuggestions.map(s => s.toLowerCase()));
+        return members.filter(member => suggestionSet.has(member.name.toLowerCase()));
     }
-    setIsSearching(true);
-    try {
-      const result = await suggestSimilarNames({
-        query: debouncedSearchTerm,
-        memberNames: allMemberNames,
-      });
-      setSuggestions(result.similarNames || []);
-    } catch (error) {
-      console.error('Error fetching suggestions:', error);
-      setSuggestions([]);
+    
+    return directMatches;
+  }, [searchQuery, members, aiSuggestions]);
+
+  const handleSearchChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const query = e.target.value;
+    setSearchQuery(query);
+    setAiSuggestions([]); // Clear previous AI suggestions
+
+    if (query.length > 2) {
+      const lowercasedQuery = query.toLowerCase();
+      const directMatches = members.filter(member =>
+        member.name.toLowerCase().includes(lowercasedQuery) ||
+        (member.nim && member.nim.toLowerCase().includes(lowercasedQuery))
+      );
+
+      // If there are no immediate direct matches, query the AI for suggestions
+      if (directMatches.length === 0) {
+        setLoadingAi(true);
+        try {
+          const memberNames = members.map(m => m.name);
+          const result = await suggestSimilarNames({ query, memberNames });
+          setAiSuggestions(result.similarNames || []);
+        } catch (error) {
+          console.error("Error fetching AI suggestions:", error);
+          setAiSuggestions([]);
+        } finally {
+          setLoadingAi(false);
+        }
+      }
+    } else {
+      setAiSuggestions([]);
     }
-    setIsSearching(false);
-  }, [debouncedSearchTerm, allMemberNames]);
-
-  useEffect(() => {
-    fetchSuggestions();
-  }, [fetchSuggestions]);
-
-
-  const getMemberId = (name: string) => {
-    const member = members.find(m => m.name === name);
-    return member ? member.id : null;
   };
 
+  const handleSelectMember = (memberId: string) => {
+    router.push(`/anggota/${memberId}`);
+  };
+  
+  const { heroTitle, heroDescription, logoUrl, appName } = settings;
+
   return (
-    <div className="flex flex-col items-center justify-start space-y-8 text-center min-h-[60vh] pt-10">
+    <div className="flex flex-col items-center justify-center text-center space-y-8">
       <div className="space-y-4">
+         {logoUrl && <img src={logoUrl} alt={appName} className="mx-auto h-24 w-24 object-contain" />}
         <h1 className="text-4xl font-bold tracking-tighter sm:text-5xl md:text-6xl font-headline">
-          {settings.heroTitle}
+          {heroTitle}
         </h1>
         <p className="max-w-[700px] text-muted-foreground md:text-xl">
-          {settings.heroDescription}
+          {heroDescription}
         </p>
       </div>
 
-      <div className="w-full max-w-md space-y-2">
-        <form className="relative" onSubmit={(e) => e.preventDefault()}>
-          <div className="absolute inset-y-0 start-0 flex items-center ps-3 pointer-events-none">
-            <Search className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+      <div className="w-full max-w-md">
+        <div className="relative">
+          <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+            <Search className="h-5 w-5 text-gray-500" />
           </div>
           <Input
             type="search"
-            id="default-search"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="block w-full p-4 ps-10"
-            placeholder="Cari nama anggota..."
+            value={searchQuery}
+            onChange={handleSearchChange}
+            placeholder="Cari nama atau NIM anggota..."
+            className="block w-full p-4 pl-10 text-base"
           />
-          {isSearching && (
-            <div className="absolute inset-y-0 end-0 flex items-center pe-3">
-              <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
-            </div>
-          )}
-        </form>
+        </div>
 
-        { (debouncedSearchTerm.length >= 3) && (
-          <Card>
-            <CardContent className="p-0">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Nama yang Mungkin Cocok</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {isSearching ? (
-                        <TableRow>
-                            <TableCell className="text-center text-muted-foreground">Mencari...</TableCell>
-                        </TableRow>
-                    ) : suggestions.length > 0 ? (
-                      suggestions.map((name) => {
-                        const memberId = getMemberId(name);
-                        if (!memberId) return null;
-                        return (
-                          <TableRow key={memberId}>
-                            <TableCell className="font-medium">
-                              <Link href={`/anggota/${memberId}`} className="block w-full text-left">
-                                {name}
-                              </Link>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })
-                    ) : (
-                      <TableRow>
-                        <TableCell className="text-center text-muted-foreground">
-                          Nama tidak ditemukan.
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-            </CardContent>
+        {searchQuery && (
+          <Card className="mt-2 text-left">
+             <ScrollArea className="h-72">
+              <CardContent className="p-2">
+                {isLoadingAi && filteredMembers.length === 0 && (
+                  <div className="p-4 text-center text-sm text-muted-foreground">Mencari saran nama...</div>
+                )}
+                {!isLoadingAi && filteredMembers.length === 0 && (
+                  <div className="p-4 text-center text-sm text-muted-foreground">Anggota tidak ditemukan.</div>
+                )}
+                {filteredMembers.map(member => (
+                  <div
+                    key={member.id}
+                    onClick={() => handleSelectMember(member.id)}
+                    className="flex items-center p-3 rounded-lg hover:bg-muted cursor-pointer"
+                  >
+                    <User className="mr-3 h-5 w-5 text-muted-foreground" />
+                    <div className="flex flex-col">
+                        <span className="font-medium">{member.name}</span>
+                        {member.nim && <span className="text-xs text-muted-foreground">{member.nim}</span>}
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
+            </ScrollArea>
           </Card>
         )}
       </div>
