@@ -129,7 +129,14 @@ export default function TransactionManager({ initialTransactions, members, isRea
 
   const form = useForm<z.infer<typeof transactionSchema>>({
     resolver: zodResolver(transactionSchema),
-    defaultValues: { type: 'Pemasukan', description: '', applyToAll: false },
+    defaultValues: { 
+        type: 'Pemasukan', 
+        description: '', 
+        applyToAll: false,
+        memberId: '',
+        treasurer: 'Bendahara 1',
+        amount: 0,
+    },
   });
 
   const transactionType = form.watch('type');
@@ -261,10 +268,20 @@ export default function TransactionManager({ initialTransactions, members, isRea
         amount: Math.abs(transaction.amount),
         date: new Date(transaction.date),
         applyToAll: false, 
+        memberId: transaction.memberId || '',
+        treasurer: transaction.treasurer || 'Bendahara 1'
       });
       setPaymentSource(transaction.treasurer || 'Bendahara 1');
     } else {
-      form.reset({ type: 'Pemasukan', amount: 0, description: '', date: new Date(), memberId: undefined, treasurer: undefined, applyToAll: false });
+      form.reset({ 
+          type: 'Pemasukan', 
+          amount: 0, 
+          description: '', 
+          date: new Date(), 
+          memberId: '', 
+          treasurer: 'Bendahara 1', 
+          applyToAll: false 
+      });
       setPaymentSource('Bendahara 1');
     }
     setDialogOpen(true);
@@ -317,7 +334,7 @@ export default function TransactionManager({ initialTransactions, members, isRea
         }
       }
       setDialogOpen(false);
-    } catch (error: any) {
+    } catch (error: any) => {
       toast({ variant: 'destructive', title: 'Error', description: error.message });
     }
     setSubmitting(false);
@@ -728,7 +745,7 @@ export default function TransactionManager({ initialTransactions, members, isRea
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Nama Anggota</FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value} disabled={!!editingTransaction}>
+                          <Select onValueChange={field.onChange} value={field.value} disabled={!!editingTransaction}>
                               <FormControl>
                                   <SelectTrigger>
                                       <SelectValue placeholder="Pilih anggota" />
@@ -774,7 +791,7 @@ export default function TransactionManager({ initialTransactions, members, isRea
                         <FormItem>
                             <FormLabel>Jumlah</FormLabel>
                             <FormControl>
-                                <Input type="number" placeholder="70000" {...field} onChange={e => field.onChange(e.target.valueAsNumber)} />
+                                <Input type="number" placeholder="70000" {...field} onChange={e => field.onChange(e.target.valueAsNumber || 0)} />
                             </FormControl>
                             <FormMessage />
                         </FormItem>
@@ -788,7 +805,7 @@ export default function TransactionManager({ initialTransactions, members, isRea
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Diterima oleh Bendahara</FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <Select onValueChange={field.onChange} value={field.value}>
                             <FormControl><SelectTrigger><SelectValue placeholder="Pilih bendahara" /></SelectTrigger></FormControl>
                             <SelectContent>
                                 <SelectItem value="Bendahara 1">Bendahara 1</SelectItem>
@@ -847,7 +864,7 @@ export default function TransactionManager({ initialTransactions, members, isRea
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Dibebankan ke (Opsional)</FormLabel>
-                           <Select onValueChange={field.onChange} defaultValue={field.value} disabled={!!editingTransaction}>
+                           <Select onValueChange={field.onChange} value={field.value} disabled={!!editingTransaction}>
                                <FormControl>
                                    <SelectTrigger>
                                        <SelectValue placeholder="Pilih anggota (opsional)" />
@@ -913,3 +930,5 @@ export default function TransactionManager({ initialTransactions, members, isRea
     </Card>
   );
 }
+
+    
