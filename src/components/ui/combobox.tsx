@@ -3,7 +3,7 @@
 
 import * as React from "react"
 import { Check, ChevronsUpDown } from "lucide-react"
-import { Combobox as HeadlessCombobox, ComboboxButton, ComboboxInput, ComboboxOption, ComboboxOptions } from '@headlessui/react'
+import { Combobox as HeadlessCombobox } from '@headlessui/react'
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button"
 type ComboboxProps = {
   options: { value: string; label: string }[];
   value?: string;
-  onChange: (value: string) => void;
+  onChange: (value: string | undefined) => void;
   placeholder?: string;
   notFoundText?: string;
   disabled?: boolean;
@@ -27,8 +27,6 @@ export function Combobox({
 }: ComboboxProps) {
   const [query, setQuery] = React.useState('')
 
-  const selectedOption = options.find((option) => option.value === value)
-
   const filteredOptions =
     query === ''
       ? options
@@ -36,33 +34,34 @@ export function Combobox({
           return option.label.toLowerCase().includes(query.toLowerCase())
         })
 
+  const selectedOption = options.find((option) => option.value === value)
+
   return (
-    <HeadlessCombobox value={value} onChange={onChange} disabled={disabled} onClose={() => setQuery('')}>
+    <HeadlessCombobox value={value} onChange={onChange} disabled={disabled} __demoMode>
       <div className="relative">
-        <HeadlessCombobox.Input
-          as={React.Fragment}
-          onChange={(event) => setQuery(event.target.value)}
-          displayValue={(val: string) => options.find(o => o.value === val)?.label || ""}
-        >
-          <Button
+        <HeadlessCombobox.Button as={React.Fragment}>
+           <Button
               variant="outline"
               role="combobox"
+              aria-expanded={true}
               className="w-full justify-between"
               disabled={disabled}
-              as="div"
           >
-              <span className="truncate">
-                {selectedOption ? selectedOption.label : placeholder}
-              </span>
+              <HeadlessCombobox.Input
+                className="w-full bg-transparent p-0 border-0 focus:ring-0"
+                onChange={(event) => setQuery(event.target.value)}
+                displayValue={(val: string) => options.find(o => o.value === val)?.label || ""}
+                placeholder={placeholder}
+              />
               <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
           </Button>
-        </HeadlessCombobox.Input>
+        </HeadlessCombobox.Button>
         
-        <ComboboxOptions
+        <HeadlessCombobox.Options
           anchor="bottom"
           transition
           className={cn(
-            "z-50 mt-1 max-h-60 w-[var(--radix-combobox-trigger-width)] overflow-auto rounded-md bg-popover p-1 text-popover-foreground shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none sm:text-sm",
+            "z-50 mt-1 max-h-60 w-[var(--trigger-width)] overflow-auto rounded-md bg-popover p-1 text-popover-foreground shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none sm:text-sm",
             "transition duration-100 ease-in data-[leave]:data-[closed]:opacity-0"
           )}
         >
@@ -72,22 +71,39 @@ export function Combobox({
             </div>
           ) : (
             filteredOptions.map((option) => (
-              <ComboboxOption
+              <HeadlessCombobox.Option
                 key={option.value}
                 value={option.value}
-                className="group flex cursor-default items-center gap-2 rounded-lg py-1.5 px-3 select-none data-[focus]:bg-accent data-[focus]:text-accent-foreground"
+                className={({ active }) =>
+                  cn(
+                    "relative cursor-default select-none py-2 pl-10 pr-4 rounded-sm",
+                    active ? "bg-accent text-accent-foreground" : "text-foreground"
+                  )
+                }
               >
-                <Check
-                  className={cn(
-                    "invisible size-4",
-                    "group-data-[selected]:visible"
-                  )}
-                />
-                <div className="text-sm/6">{option.label}</div>
-              </ComboboxOption>
+                {({ selected }) => (
+                  <>
+                    <span
+                      className={cn(
+                        "block truncate",
+                        selected ? "font-medium" : "font-normal"
+                      )}
+                    >
+                      {option.label}
+                    </span>
+                    {selected ? (
+                      <span
+                        className="absolute inset-y-0 left-0 flex items-center pl-3 text-accent-foreground"
+                      >
+                        <Check className="h-4 w-4" />
+                      </span>
+                    ) : null}
+                  </>
+                )}
+              </HeadlessCombobox.Option>
             ))
           )}
-        </ComboboxOptions>
+        </HeadlessCombobox.Options>
       </div>
     </HeadlessCombobox>
   )
