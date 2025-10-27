@@ -161,16 +161,25 @@ export default function MemberManager({ initialMembers, transactions, cashierDay
     }
   };
 
-  const handleCopyMemberInfo = (member: MemberWithBalance) => {
-    const formattedDues = formatCurrency(member.unpaidDues);
-    const textToCopy = member.unpaidDues > 0
-      ? `Pengingat Iuran Kas untuk ${member.name}: Total tunggakan Anda saat ini adalah ${formattedDues}. Terima kasih!`
-      : `${member.name} tidak memiliki tunggakan kas. Terima kasih!`;
+  const handleCopyDuesList = () => {
+    const membersWithDues = sortedMembers.filter(member => member.unpaidDues > 0);
+
+    if (membersWithDues.length === 0) {
+      toast({ title: 'Tidak ada tunggakan', description: 'Semua anggota sudah lunas!' });
+      return;
+    }
+
+    const header = '📝 DAFTAR TUNGGAKAN KAS 📝\n';
+    const listText = membersWithDues
+      .map((member, index) => `${index + 1}. ${member.name} - ${formatCurrency(member.unpaidDues)}`)
+      .join('\n');
+    
+    const textToCopy = header + '\n' + listText;
 
     navigator.clipboard.writeText(textToCopy).then(() => {
-        toast({ title: 'Info disalin!', description: `Pengingat untuk ${member.name} berhasil disalin.` });
+        toast({ title: 'Daftar tunggakan disalin!', description: `${membersWithDues.length} anggota berhasil disalin ke clipboard.` });
     }).catch(err => {
-        toast({ variant: 'destructive', title: 'Gagal menyalin', description: 'Tidak dapat menyalin teks ke clipboard.' });
+        toast({ variant: 'destructive', title: 'Gagal menyalin', description: 'Tidak dapat menyalin daftar ke clipboard.' });
     });
   };
 
@@ -268,10 +277,15 @@ export default function MemberManager({ initialMembers, transactions, cashierDay
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="flex justify-between items-center mb-4">
-           <Button variant="outline" onClick={handleExport}>
-            <FileDown className="mr-2 h-4 w-4" /> Ekspor ke XLSX
-          </Button>
+        <div className="flex flex-wrap gap-2 justify-between items-center mb-4">
+           <div className="flex gap-2">
+             <Button variant="outline" onClick={handleExport}>
+              <FileDown className="mr-2 h-4 w-4" /> Ekspor ke XLSX
+             </Button>
+             <Button variant="outline" onClick={handleCopyDuesList}>
+              <ClipboardCopy className="mr-2 h-4 w-4" /> Salin Daftar Tunggakan
+             </Button>
+           </div>
           {!isReadOnly && (
             <div className="flex items-center gap-2">
               {selectedMembers.length > 0 && (
@@ -368,16 +382,6 @@ export default function MemberManager({ initialMembers, transactions, cashierDay
                     {!isReadOnly && (
                       <TableCell className="text-right">
                         <TooltipProvider>
-                           <Tooltip>
-                            <TooltipTrigger asChild>
-                               <Button variant="ghost" size="icon" onClick={() => handleCopyMemberInfo(member)}>
-                                  <ClipboardCopy className="h-4 w-4" />
-                               </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>Salin info tunggakan</p>
-                            </TooltipContent>
-                          </Tooltip>
                           <Button variant="ghost" size="icon" onClick={() => handleDialogOpen(member)}>
                             <Edit className="h-4 w-4" />
                           </Button>
@@ -477,3 +481,5 @@ export default function MemberManager({ initialMembers, transactions, cashierDay
     </Card>
   );
 }
+
+    
