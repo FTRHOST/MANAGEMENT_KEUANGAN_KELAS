@@ -6,7 +6,11 @@ import { getCashierDays, getSettings } from '@/lib/actions';
 import { collection, getDoc, doc } from 'firebase/firestore';
 import { cookies } from 'next/headers';
 
-
+/**
+ * Fetches all the data needed for the admin page.
+ * This includes members, transactions, cashier days, and settings.
+ * @returns {Promise<object>} A promise that resolves to an object containing the admin data.
+ */
 async function getAdminData() {
   const membersCol = collection(db, 'members');
   const membersSnapshot = await getDocs(query(membersCol, orderBy('name')));
@@ -29,6 +33,11 @@ async function getAdminData() {
   return { members, transactions, cashierDays, settings };
 }
 
+/**
+ * The admin page of the application.
+ * It fetches the admin data and renders the AdminTabs component.
+ * @returns {Promise<JSX.Element>} A promise that resolves to the admin page component.
+ */
 export default async function AdminPage() {
     const { members, transactions, cashierDays, settings } = await getAdminData();
     const cookieStore = cookies();

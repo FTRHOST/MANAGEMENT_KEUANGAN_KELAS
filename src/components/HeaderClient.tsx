@@ -21,6 +21,14 @@ type HeaderClientProps = {
   settings: Settings;
 };
 
+/**
+ * A client component that renders the header of the application.
+ * It handles the display of the login/logout buttons and the admin dropdown menu.
+ * @param {object} props - The props for the component.
+ * @param {boolean} props.isAuthenticated - Whether the user is authenticated.
+ * @param {Settings} props.settings - The application settings.
+ * @returns {JSX.Element} The header component.
+ */
 export default function HeaderClient({ isAuthenticated, settings }: HeaderClientProps) {
   const [isLoginOpen, setLoginOpen] = useState(false);
   const router = useRouter();

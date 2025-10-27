@@ -1,4 +1,7 @@
-// Import the functions you need from the SDKs you need
+/**
+ * @file This file configures and initializes the Firebase SDK.
+ * It exports the Firebase app instance, Firestore database instance, and Analytics instance.
+ */
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 import { getAnalytics, isSupported } from "firebase/analytics";

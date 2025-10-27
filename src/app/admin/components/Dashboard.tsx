@@ -20,7 +20,11 @@ import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { id } from 'date-fns/locale';
 
-
+/**
+ * Formats a number as a currency string.
+ * @param {number} amount - The number to format.
+ * @returns {string} The formatted currency string.
+ */
 function formatCurrency(amount: number) {
   return new Intl.NumberFormat('id-ID', {
     style: 'currency',
@@ -29,6 +33,13 @@ function formatCurrency(amount: number) {
   }).format(amount);
 }
 
+/**
+ * A component that displays the dashboard with financial statistics and charts.
+ * @param {object} props - The props for the component.
+ * @param {Member[]} props.members - The list of members.
+ * @param {Transaction[]} props.transactions - The list of transactions.
+ * @returns {JSX.Element} The dashboard component.
+ */
 export default function Dashboard({
   members,
   transactions,
