@@ -47,7 +47,7 @@ import { useToast } from '@/hooks/use-toast';
 import { addMember, updateMember, deleteMember } from '@/lib/actions';
 import type { Member, Transaction, CashierDay, Settings } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { PlusCircle, Edit, Trash2, Loader2, Ban, FileDown } from 'lucide-react';
+import { PlusCircle, Edit, Trash2, Loader2, Ban, FileDown, ArrowUpDown } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { exportToXLSX } from '@/lib/export';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -55,6 +55,14 @@ import { Checkbox } from '@/components/ui/checkbox';
 const memberSchema = z.object({
   name: z.string().min(3, 'Nama minimal 3 karakter'),
 });
+
+type MemberWithBalance = Member & {
+  unpaidDues: number;
+  withdrawableBalance: number;
+};
+
+type SortKey = keyof MemberWithBalance;
+
 
 type MemberManagerProps = {
   initialMembers: Member[];
@@ -79,11 +87,8 @@ export default function MemberManager({ initialMembers, transactions, cashierDay
   const [isDialogOpen, setDialogOpen] = useState(false);
   const [editingMember, setEditingMember] = useState<Member | null>(null);
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
+  const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'ascending' | 'descending' } | null>({ key: 'name', direction: 'ascending' });
 
-  const form = useForm<z.infer<typeof memberSchema>>({
-    resolver: zodResolver(memberSchema),
-    defaultValues: { name: '' },
-  });
 
   const memberHasTransactions = (memberId: string) => {
     return transactions.some(t => t.memberId === memberId);
@@ -160,46 +165,76 @@ export default function MemberManager({ initialMembers, transactions, cashierDay
     }
   };
 
-  const memberBalances = useMemo(() => {
-    const balances = new Map<string, { unpaidDues: number; withdrawableBalance: number }>();
-    const totalMemberCount = members.length > 0 ? members.length : 1;
-    
-    const sharedExpensesTotal = transactions
-      .filter((t) => t.type === 'Pengeluaran' && !t.memberId)
-      .reduce((sum, t) => sum + Math.abs(t.amount), 0);
-    const sharedExpensePerMember = sharedExpensesTotal / totalMemberCount;
-
-    members.forEach(member => {
-      const totalPaid = transactions
-        .filter(t => t.type === 'Pemasukan' && t.memberId === member.id)
-        .reduce((sum, t) => sum + t.amount, 0);
-
-      const totalDuesLiability = cashierDays.reduce((sum, day) => sum + (day.duesAmount || settings.duesAmount || 0), 0);
-
-      const personalExpensesTotal = transactions
-        .filter(t => t.type === 'Pengeluaran' && t.memberId === member.id)
-        .reduce((sum, t) => sum + t.amount, 0);
+  const sortedMembers = useMemo(() => {
+    const membersWithBalances: MemberWithBalance[] = members.map(member => {
+        const totalMemberCount = members.length > 0 ? members.length : 1;
         
-      const totalExpenses = Math.abs(personalExpensesTotal) + sharedExpensePerMember;
-      
-      const unpaidDuesAmount = Math.max(0, totalDuesLiability - totalPaid);
-      const withdrawableBalance = Math.max(0, totalPaid - totalExpenses);
-      
-      balances.set(member.id, { unpaidDues: unpaidDuesAmount, withdrawableBalance });
+        const sharedExpensesTotal = transactions
+          .filter((t) => t.type === 'Pengeluaran' && !t.memberId)
+          .reduce((sum, t) => sum + Math.abs(t.amount), 0);
+        const sharedExpensePerMember = sharedExpensesTotal / totalMemberCount;
+
+        const totalPaid = transactions
+            .filter(t => t.type === 'Pemasukan' && t.memberId === member.id)
+            .reduce((sum, t) => sum + t.amount, 0);
+
+        const totalDuesLiability = cashierDays.reduce((sum, day) => sum + (day.duesAmount || settings.duesAmount || 0), 0);
+
+        const personalExpensesTotal = transactions
+            .filter(t => t.type === 'Pengeluaran' && t.memberId === member.id)
+            .reduce((sum, t) => sum + t.amount, 0);
+            
+        const totalExpenses = Math.abs(personalExpensesTotal) + sharedExpensePerMember;
+        
+        const unpaidDuesAmount = Math.max(0, totalDuesLiability - totalPaid);
+        const withdrawableBalance = Math.max(0, totalPaid - totalExpenses);
+        
+        return { ...member, unpaidDues: unpaidDuesAmount, withdrawableBalance };
     });
-    return balances;
-  }, [members, transactions, cashierDays, settings]);
+
+    if (sortConfig !== null) {
+      membersWithBalances.sort((a, b) => {
+        if (a[sortConfig.key] < b[sortConfig.key]) {
+          return sortConfig.direction === 'ascending' ? -1 : 1;
+        }
+        if (a[sortConfig.key] > b[sortConfig.key]) {
+          return sortConfig.direction === 'ascending' ? 1 : -1;
+        }
+        return 0;
+      });
+    }
+    return membersWithBalances;
+  }, [members, transactions, cashierDays, settings, sortConfig]);
+
+  const requestSort = (key: SortKey) => {
+    let direction: 'ascending' | 'descending' = 'ascending';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'ascending') {
+      direction = 'descending';
+    }
+    setSortConfig({ key, direction });
+  };
+
 
   const handleExport = () => {
-    const dataToExport = members.map(member => {
-        const balanceInfo = memberBalances.get(member.id);
+    const dataToExport = sortedMembers.map(member => {
         return {
             'Nama Anggota': member.name,
-            'Total Tunggakan': formatCurrency(balanceInfo?.unpaidDues ?? 0),
-            'Sisa Kas (Dapat Ditarik)': formatCurrency(balanceInfo?.withdrawableBalance ?? 0),
+            'Total Tunggakan': formatCurrency(member.unpaidDues ?? 0),
+            'Sisa Kas (Dapat Ditarik)': formatCurrency(member.withdrawableBalance ?? 0),
         };
     });
     exportToXLSX(dataToExport, 'Laporan_Anggota_Kelas', 'Anggota');
+  };
+
+  const getSortIcon = (key: SortKey) => {
+    if (!sortConfig || sortConfig.key !== key) {
+      return <ArrowUpDown className="ml-2 h-4 w-4" />;
+    }
+    if (sortConfig.direction === 'ascending') {
+      return <ArrowUpDown className="ml-2 h-4 w-4" />; // Simplified icon
+    } else {
+      return <ArrowUpDown className="ml-2 h-4 w-4" />; // Simplified icon
+    }
   };
 
 
@@ -259,17 +294,31 @@ export default function MemberManager({ initialMembers, transactions, cashierDay
                         disabled={isReadOnly}
                     />
                 </TableHead>
-                <TableHead>Nama Anggota</TableHead>
-                <TableHead>Total Tunggakan</TableHead>
-                <TableHead>Sisa Kas (Dapat Ditarik)</TableHead>
+                <TableHead>
+                   <Button variant="ghost" onClick={() => requestSort('name')}>
+                    Nama Anggota
+                    {getSortIcon('name')}
+                   </Button>
+                </TableHead>
+                <TableHead>
+                  <Button variant="ghost" onClick={() => requestSort('unpaidDues')}>
+                    Total Tunggakan
+                    {getSortIcon('unpaidDues')}
+                   </Button>
+                </TableHead>
+                <TableHead>
+                   <Button variant="ghost" onClick={() => requestSort('withdrawableBalance')}>
+                    Sisa Kas (Dapat Ditarik)
+                    {getSortIcon('withdrawableBalance')}
+                   </Button>
+                </TableHead>
                 {!isReadOnly && <TableHead className="text-right">Aksi</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
-              {members.map((member) => {
-                const balanceInfo = memberBalances.get(member.id);
-                const unpaidDues = balanceInfo?.unpaidDues ?? 0;
-                const withdrawableBalance = balanceInfo?.withdrawableBalance ?? 0;
+              {sortedMembers.map((member) => {
+                const unpaidDues = member.unpaidDues ?? 0;
+                const withdrawableBalance = member.withdrawableBalance ?? 0;
                 const isSelected = selectedMembers.includes(member.id);
                 return (
                   <TableRow key={member.id} data-state={isSelected ? "selected" : ""}>
@@ -377,3 +426,5 @@ export default function MemberManager({ initialMembers, transactions, cashierDay
     </Card>
   );
 }
+
+    
