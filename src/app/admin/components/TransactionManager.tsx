@@ -67,7 +67,6 @@ import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { exportToXLSX } from '@/lib/export';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Combobox } from '@/components/ui/combobox';
 
 
 function formatCurrency(amount: number) {
@@ -727,16 +726,22 @@ export default function TransactionManager({ initialTransactions, members, isRea
                     control={form.control}
                     name="memberId"
                     render={({ field }) => (
-                      <FormItem className="flex flex-col">
+                      <FormItem>
                         <FormLabel>Nama Anggota</FormLabel>
-                        <Combobox
-                            options={memberOptions}
-                            value={field.value}
-                            onChange={field.onChange}
-                            placeholder="Cari nama atau NIM..."
-                            notFoundText="Anggota tidak ditemukan."
-                            disabled={!!editingTransaction}
-                        />
+                          <Select onValueChange={field.onChange} defaultValue={field.value} disabled={!!editingTransaction}>
+                              <FormControl>
+                                  <SelectTrigger>
+                                      <SelectValue placeholder="Pilih anggota" />
+                                  </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                  {members.map(member => (
+                                      <SelectItem key={member.id} value={member.id}>
+                                          {member.name} {member.nim ? `(${member.nim})` : ''}
+                                      </SelectItem>
+                                  ))}
+                              </SelectContent>
+                          </Select>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -840,16 +845,23 @@ export default function TransactionManager({ initialTransactions, members, isRea
                       control={form.control}
                       name="memberId"
                       render={({ field }) => (
-                        <FormItem className="flex flex-col">
+                        <FormItem>
                           <FormLabel>Dibebankan ke (Opsional)</FormLabel>
-                           <Combobox
-                                options={memberOptions}
-                                value={field.value}
-                                onChange={field.onChange}
-                                placeholder="Cari nama atau NIM..."
-                                notFoundText="Anggota tidak ditemukan."
-                                disabled={!!editingTransaction}
-                            />
+                           <Select onValueChange={field.onChange} defaultValue={field.value} disabled={!!editingTransaction}>
+                               <FormControl>
+                                   <SelectTrigger>
+                                       <SelectValue placeholder="Pilih anggota (opsional)" />
+                                   </SelectTrigger>
+                               </FormControl>
+                               <SelectContent>
+                                   <SelectItem value="">Pengeluaran Bersama</SelectItem>
+                                   {members.map(member => (
+                                       <SelectItem key={member.id} value={member.id}>
+                                           {member.name} {member.nim ? `(${member.nim})` : ''}
+                                       </SelectItem>
+                                   ))}
+                               </SelectContent>
+                           </Select>
                            <p className="text-xs text-muted-foreground">
                               Jika tidak dipilih, akan menjadi pengeluaran bersama.
                            </p>
