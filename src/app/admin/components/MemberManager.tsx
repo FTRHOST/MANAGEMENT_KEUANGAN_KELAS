@@ -105,7 +105,7 @@ export default function MemberManager({ initialMembers, transactions, cashierDay
   const handleDialogOpen = (member: Member | null) => {
     if (isReadOnly) return;
     setEditingMember(member);
-    form.reset({ name: member ? member.name : '', nim: member ? member.nim : '' });
+    form.reset({ name: member ? member.name : '', nim: member ? member.nim || '' : '' });
     setDialogOpen(true);
   };
 
@@ -481,5 +481,7 @@ export default function MemberManager({ initialMembers, transactions, cashierDay
     </Card>
   );
 }
+
+    
 
     
