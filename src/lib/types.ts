@@ -2,6 +2,7 @@
 export type Member = {
   id: string;
   name: string;
+  nim?: string;
 };
 
 export type Transaction = {

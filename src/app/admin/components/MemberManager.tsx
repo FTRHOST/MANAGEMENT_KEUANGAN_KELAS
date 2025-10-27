@@ -54,6 +54,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 
 const memberSchema = z.object({
   name: z.string().min(3, 'Nama minimal 3 karakter'),
+  nim: z.string().optional(),
 });
 
 type MemberWithBalance = Member & {
@@ -61,7 +62,7 @@ type MemberWithBalance = Member & {
   withdrawableBalance: number;
 };
 
-type SortKey = keyof MemberWithBalance | 'name';
+type SortKey = keyof MemberWithBalance | 'name' | 'nim';
 
 
 type MemberManagerProps = {
@@ -93,6 +94,7 @@ export default function MemberManager({ initialMembers, transactions, cashierDay
     resolver: zodResolver(memberSchema),
     defaultValues: {
       name: '',
+      nim: '',
     },
   });
 
@@ -103,7 +105,7 @@ export default function MemberManager({ initialMembers, transactions, cashierDay
   const handleDialogOpen = (member: Member | null) => {
     if (isReadOnly) return;
     setEditingMember(member);
-    form.reset({ name: member ? member.name : '' });
+    form.reset({ name: member ? member.name : '', nim: member ? member.nim : '' });
     setDialogOpen(true);
   };
 
@@ -111,11 +113,11 @@ export default function MemberManager({ initialMembers, transactions, cashierDay
     setSubmitting(true);
     try {
       if (editingMember) {
-        await updateMember(editingMember.id, values.name);
-        setMembers(members.map(m => m.id === editingMember.id ? { ...m, name: values.name } : m));
-        toast({ title: 'Sukses', description: 'Nama anggota berhasil diperbarui.' });
+        await updateMember(editingMember.id, values.name, values.nim);
+        setMembers(members.map(m => m.id === editingMember.id ? { ...m, name: values.name, nim: values.nim } : m));
+        toast({ title: 'Sukses', description: 'Data anggota berhasil diperbarui.' });
       } else {
-        await addMember(values.name);
+        await addMember(values.name, values.nim);
         // We don't get the new member list here, revalidation will handle it
         toast({ title: 'Sukses', description: 'Anggota baru berhasil ditambahkan.' });
       }
@@ -227,6 +229,7 @@ export default function MemberManager({ initialMembers, transactions, cashierDay
     const dataToExport = sortedMembers.map(member => {
         return {
             'Nama Anggota': member.name,
+            'NIM': member.nim || '-',
             'Total Tunggakan': formatCurrency(member.unpaidDues ?? 0),
             'Sisa Kas (Dapat Ditarik)': formatCurrency(member.withdrawableBalance ?? 0),
         };
@@ -305,6 +308,12 @@ export default function MemberManager({ initialMembers, transactions, cashierDay
                     {getSortIcon('name')}
                    </Button>
                 </TableHead>
+                 <TableHead>
+                   <Button variant="ghost" onClick={() => requestSort('nim')}>
+                    NIM
+                    {getSortIcon('nim')}
+                   </Button>
+                </TableHead>
                 <TableHead>
                   <Button variant="ghost" onClick={() => requestSort('unpaidDues')}>
                     Total Tunggakan
@@ -336,6 +345,7 @@ export default function MemberManager({ initialMembers, transactions, cashierDay
                         />
                     </TableCell>
                     <TableCell className="font-medium">{member.name}</TableCell>
+                    <TableCell>{member.nim || '-'}</TableCell>
                     <TableCell className={unpaidDues > 0 ? 'text-destructive font-semibold' : ''}>
                       {formatCurrency(unpaidDues)}
                     </TableCell>
@@ -409,6 +419,19 @@ export default function MemberManager({ initialMembers, transactions, cashierDay
                                     <FormLabel>Nama Anggota</FormLabel>
                                     <FormControl>
                                         <Input placeholder="John Doe" {...field} />
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                        <FormField
+                            control={form.control}
+                            name="nim"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>NIM (Opsional)</FormLabel>
+                                    <FormControl>
+                                        <Input placeholder="123456789" {...field} />
                                     </FormControl>
                                     <FormMessage />
                                 </FormItem>

@@ -67,6 +67,7 @@ import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { exportToXLSX } from '@/lib/export';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Combobox } from '@/components/ui/combobox';
 
 
 function formatCurrency(amount: number) {
@@ -411,6 +412,12 @@ export default function TransactionManager({ initialTransactions, members, isRea
   };
 
   const isManualSplitInvalid = paymentSource === 'Manual' && (amount1 + amount2 !== totalAmount || amount1 > balanceBendahara1 || amount2 > balanceBendahara2 || amount1 < 0 || amount2 < 0);
+  
+  const memberOptions = members.map(member => ({
+    value: member.id,
+    label: `${member.name} ${member.nim ? `(${member.nim})` : ''}`,
+  }));
+
 
   return (
      <Card>
@@ -720,14 +727,16 @@ export default function TransactionManager({ initialTransactions, members, isRea
                     control={form.control}
                     name="memberId"
                     render={({ field }) => (
-                      <FormItem>
+                      <FormItem className="flex flex-col">
                         <FormLabel>Nama Anggota</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value} disabled={!!editingTransaction}>
-                          <FormControl><SelectTrigger><SelectValue placeholder="Pilih anggota" /></SelectTrigger></FormControl>
-                          <SelectContent>
-                            {members.map(m => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
+                        <Combobox
+                            options={memberOptions}
+                            value={field.value}
+                            onChange={field.onChange}
+                            placeholder="Cari nama atau NIM..."
+                            notFoundText="Anggota tidak ditemukan."
+                            disabled={!!editingTransaction}
+                        />
                         <FormMessage />
                       </FormItem>
                     )}
@@ -831,14 +840,16 @@ export default function TransactionManager({ initialTransactions, members, isRea
                       control={form.control}
                       name="memberId"
                       render={({ field }) => (
-                        <FormItem>
+                        <FormItem className="flex flex-col">
                           <FormLabel>Dibebankan ke (Opsional)</FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value} disabled={!!editingTransaction}>
-                            <FormControl><SelectTrigger><SelectValue placeholder="Pilih anggota jika pengeluaran pribadi" /></SelectTrigger></FormControl>
-                            <SelectContent>
-                              {members.map(m => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}
-                            </SelectContent>
-                          </Select>
+                           <Combobox
+                                options={memberOptions}
+                                value={field.value}
+                                onChange={field.onChange}
+                                placeholder="Cari nama atau NIM..."
+                                notFoundText="Anggota tidak ditemukan."
+                                disabled={!!editingTransaction}
+                            />
                            <p className="text-xs text-muted-foreground">
                               Jika tidak dipilih, akan menjadi pengeluaran bersama.
                            </p>

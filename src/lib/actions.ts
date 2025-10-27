@@ -78,21 +78,21 @@ export async function updateSettings(settings: Omit<Settings, 'duesAmount' | 'st
 
 
 // Member Actions
-export async function addMember(name: string) {
+export async function addMember(name: string, nim?: string) {
   if (!name) {
     return { error: 'Nama anggota tidak boleh kosong.' };
   }
-  await addDoc(collection(db, 'members'), { name });
+  await addDoc(collection(db, 'members'), { name, nim: nim || '' });
   revalidatePath('/admin');
   revalidatePath('/');
 }
 
-export async function updateMember(id: string, name: string) {
+export async function updateMember(id: string, name: string, nim?: string) {
   if (!name) {
     return { error: 'Nama anggota tidak boleh kosong.' };
   }
   const memberDoc = doc(db, 'members', id);
-  await updateDoc(memberDoc, { name });
+  await updateDoc(memberDoc, { name, nim: nim || '' });
   revalidatePath('/admin');
   revalidatePath('/anggota', 'layout');
 }
