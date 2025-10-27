@@ -6,6 +6,11 @@ import { Header } from '@/components/Header';
 import { Analytics } from '@vercel/analytics/react';
 import { getSettings } from '@/lib/actions';
 
+/**
+ * Generates the metadata for the application.
+ * This includes the title, description, icons, and openGraph and twitter metadata.
+ * @returns {Promise<Metadata>} A promise that resolves to the metadata object.
+ */
 export async function generateMetadata(): Promise<Metadata> {
   const settings = await getSettings();
 
@@ -44,7 +49,13 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
-
+/**
+ * The root layout for the application.
+ * It sets up the HTML structure, includes the header, and renders the children.
+ * @param {object} props - The props for the component.
+ * @param {React.ReactNode} props.children - The children to render.
+ * @returns {JSX.Element} The root layout component.
+ */
 export default function RootLayout({
   children,
 }: Readonly<{

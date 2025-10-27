@@ -68,7 +68,11 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { exportToXLSX } from '@/lib/export';
 import { Checkbox } from '@/components/ui/checkbox';
 
-
+/**
+ * Formats a number as a currency string.
+ * @param {number} amount - The number to format.
+ * @returns {string} The formatted currency string.
+ */
 function formatCurrency(amount: number) {
     return new Intl.NumberFormat('id-ID', {
       style: 'currency',
@@ -76,7 +80,12 @@ function formatCurrency(amount: number) {
       minimumFractionDigits: 0,
     }).format(amount);
 }
-  
+
+/**
+ * Formats a date string or Date object as a localized string.
+ * @param {string | Date} dateValue - The date to format.
+ * @returns {string} The formatted date string.
+ */
 function formatDate(dateValue: string | Date) {
   const date = typeof dateValue === 'string' ? new Date(dateValue) : dateValue;
   if (isNaN(date.getTime())) {
@@ -113,6 +122,14 @@ type TransactionManagerProps = {
   isReadOnly: boolean;
 };
 
+/**
+ * A component for managing transactions, including adding, editing, and deleting them.
+ * @param {object} props - The props for the component.
+ * @param {Transaction[]} props.initialTransactions - The initial list of transactions.
+ * @param {Member[]} props.members - The list of members.
+ * @param {boolean} props.isReadOnly - Whether the user is in read-only mode.
+ * @returns {JSX.Element} The transaction manager component.
+ */
 export default function TransactionManager({ initialTransactions, members, isReadOnly }: TransactionManagerProps) {
   const { toast } = useToast();
   const [isSubmitting, setSubmitting] = useState(false);

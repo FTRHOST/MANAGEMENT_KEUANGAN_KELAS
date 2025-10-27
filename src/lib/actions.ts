@@ -22,6 +22,11 @@ import type { Member, Transaction, TransactionData, Settings, CashierDay } from 
 import { randomUUID } from 'crypto';
 
 // Settings Actions
+/**
+ * Fetches the application settings from Firestore.
+ * If no settings are found, it returns a default configuration.
+ * @returns {Promise<Settings>} A promise that resolves to the settings object.
+ */
 export async function getSettings(): Promise<Settings> {
   const settingsDoc = await getDoc(doc(db, 'settings', 'config'));
   if (settingsDoc.exists()) {
@@ -56,6 +61,11 @@ export async function getSettings(): Promise<Settings> {
   };
 }
 
+/**
+ * Updates the application settings in Firestore.
+ * It merges the new settings with the existing ones.
+ * @param settings - The settings object to update.
+ */
 export async function updateSettings(settings: Omit<Settings, 'duesAmount' | 'startDate'> & { duesAmount: number | string, startDate: Date | string | null }) {
   const settingsDoc = doc(db, 'settings', 'config');
   const dataToSave: any = {
@@ -78,6 +88,12 @@ export async function updateSettings(settings: Omit<Settings, 'duesAmount' | 'st
 
 
 // Member Actions
+/**
+ * Adds a new member to the Firestore database.
+ * @param name - The name of the member.
+ * @param nim - The student ID number of the member (optional).
+ * @returns {Promise<{error: string} | undefined>} A promise that resolves to an error object if the name is empty, otherwise undefined.
+ */
 export async function addMember(name: string, nim?: string) {
   if (!name) {
     return { error: 'Nama anggota tidak boleh kosong.' };
@@ -87,6 +103,13 @@ export async function addMember(name: string, nim?: string) {
   revalidatePath('/');
 }
 
+/**
+ * Updates an existing member's information in the Firestore database.
+ * @param id - The ID of the member to update.
+ * @param name - The new name of the member.
+ * @param nim - The new student ID number of the member (optional).
+ * @returns {Promise<{error: string} | undefined>} A promise that resolves to an error object if the name is empty, otherwise undefined.
+ */
 export async function updateMember(id: string, name: string, nim?: string) {
   if (!name) {
     return { error: 'Nama anggota tidak boleh kosong.' };
@@ -97,6 +120,12 @@ export async function updateMember(id: string, name: string, nim?: string) {
   revalidatePath('/anggota', 'layout');
 }
 
+/**
+ * Deletes a member from the Firestore database.
+ * A member cannot be deleted if they have associated transactions.
+ * @param id - The ID of the member to delete.
+ * @returns {Promise<{error: string} | undefined>} A promise that resolves to an error object if the member has transactions, otherwise undefined.
+ */
 export async function deleteMember(id: string) {
   // Check if member has transactions
   const q = query(collection(db, 'transactions'), where('memberId', '==', id));
@@ -110,6 +139,11 @@ export async function deleteMember(id: string) {
 }
 
 // Transaction Actions
+/**
+ * Adds a new transaction to the Firestore database.
+ * If the transaction is a 'Pemasukan' and 'applyToAll' is true, it creates a transaction for each member.
+ * @param transaction - The transaction object to add.
+ */
 export async function addTransaction(transaction: Omit<Transaction, 'id' | 'date' | 'memberId'> & { date: Date, memberId?: string | null, applyToAll?: boolean }) {
   if (transaction.type === 'Pemasukan' && transaction.applyToAll) {
     const batch = writeBatch(db);
@@ -178,7 +212,11 @@ export async function addTransaction(transaction: Omit<Transaction, 'id' | 'date
   revalidatePath('/anggota', 'layout');
 }
 
-
+/**
+ * Updates an existing transaction in the Firestore database.
+ * @param id - The ID of the transaction to update.
+ * @param transaction - The transaction object with updated data.
+ */
 export async function updateTransaction(id: string, transaction: Omit<Transaction, 'id' | 'date'> & { date: Date }) {
     const dataToUpdate: any = {
       ...transaction,
@@ -220,6 +258,12 @@ export async function updateTransaction(id: string, transaction: Omit<Transactio
     revalidatePath('/anggota', 'layout');
 }
 
+/**
+ * Deletes a transaction from the Firestore database.
+ * If a batchId is provided, it deletes all transactions with that batchId.
+ * @param id - The ID of the transaction to delete.
+ * @param batchId - The batch ID of the transactions to delete (optional).
+ */
 export async function deleteTransaction(id: string, batchId?: string) {
   if (batchId) {
     // This is a bulk delete request
@@ -239,6 +283,10 @@ export async function deleteTransaction(id: string, batchId?: string) {
 }
 
 // Cashier Day Actions
+/**
+ * Fetches all cashier days from the Firestore database.
+ * @returns {Promise<CashierDay[]>} A promise that resolves to an array of cashier day objects.
+ */
 export async function getCashierDays(): Promise<CashierDay[]> {
     const cashierDaysCol = collection(db, 'cashier_days');
     const snapshot = await getDocs(query(cashierDaysCol, orderBy('date', 'desc')));
@@ -255,6 +303,11 @@ export async function getCashierDays(): Promise<CashierDay[]> {
     });
 }
 
+/**
+ * Adds a new cashier day to the Firestore database.
+ * @param data - The cashier day object to add.
+ * @returns {Promise<{error: string} | undefined>} A promise that resolves to an error object if the date or description is empty, otherwise undefined.
+ */
 export async function addCashierDay(data: { date: Date; description: string; duesAmount: number }) {
     if (!data.date || !data.description) {
         return { error: 'Tanggal dan deskripsi tidak boleh kosong.' };
@@ -268,6 +321,10 @@ export async function addCashierDay(data: { date: Date; description: string; due
     revalidatePath('/anggota', 'layout');
 }
 
+/**
+ * Deletes a cashier day from the Firestore database.
+ * @param id - The ID of the cashier day to delete.
+ */
 export async function deleteCashierDay(id: string) {
     await deleteDoc(doc(db, 'cashier_days', id));
     revalidatePath('/admin');
