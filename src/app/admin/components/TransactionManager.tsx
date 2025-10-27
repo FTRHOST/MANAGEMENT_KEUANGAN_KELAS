@@ -120,6 +120,7 @@ export default function TransactionManager({ initialTransactions, members, isRea
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [selectedTransactions, setSelectedTransactions] = useState<string[]>([]);
   const [date, setDate] = useState<DateRange | undefined>();
+  const [treasurerFilter, setTreasurerFilter] = useState('Semua');
   
   // State for combined treasurer payment
   const [paymentSource, setPaymentSource] = useState('Bendahara 1');
@@ -197,30 +198,34 @@ export default function TransactionManager({ initialTransactions, members, isRea
     return Array.from(transactionMap.values()).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [initialTransactions]);
 
-  const { filteredTransactions, totalIncome, totalExpenses, filteredB1Balance, filteredB2Balance } = useMemo(() => {
+  const { filteredTransactions, totalIncome, totalExpenses } = useMemo(() => {
     const filtered = groupedTransactions.filter(t => {
-      if (!date?.from && !date?.to) return true;
-      const transactionDate = new Date(t.date);
-      let from = date?.from;
-      let to = date?.to;
-
-      if (from) from = new Date(from.setHours(0, 0, 0, 0));
-      if (to) to = new Date(to.setHours(23, 59, 59, 999));
+      // Date filter
+      let dateMatch = true;
+      if (date?.from || date?.to) {
+        const transactionDate = new Date(t.date);
+        let from = date?.from;
+        let to = date?.to;
+        if (from) from = new Date(from.setHours(0, 0, 0, 0));
+        if (to) to = new Date(to.setHours(23, 59, 59, 999));
+        
+        if (from && to) dateMatch = transactionDate >= from && transactionDate <= to;
+        else if (from) dateMatch = transactionDate >= from;
+        else if (to) dateMatch = transactionDate <= to;
+      }
       
-      if (from && to) return transactionDate >= from && transactionDate <= to;
-      if (from) return transactionDate >= from;
-      if (to) return transactionDate <= to;
+      // Treasurer filter
+      let treasurerMatch = true;
+      if (treasurerFilter !== 'Semua') {
+          if (t.batchId && t.type === 'Pengeluaran') { // Combined Expense
+              treasurerMatch = t.subTransactions?.some(st => st.treasurer === treasurerFilter) ?? false;
+          } else {
+              treasurerMatch = t.treasurer === treasurerFilter;
+          }
+      }
 
-      return true;
+      return dateMatch && treasurerMatch;
     });
-
-    const income = filtered
-      .filter(t => t.type === 'Pemasukan')
-      .reduce((sum, t) => sum + Math.abs(t.totalAmount ?? t.amount), 0);
-    
-    const expenses = filtered
-      .filter(t => t.type === 'Pengeluaran')
-      .reduce((sum, t) => sum + Math.abs(t.totalAmount ?? t.amount), 0);
 
     const getFlattened = (arr: (Transaction & { memberCount?: number; totalAmount?: number, subTransactions?: Transaction[] })[]) => {
       const flattened: Transaction[] = [];
@@ -236,16 +241,16 @@ export default function TransactionManager({ initialTransactions, members, isRea
 
     const flatFiltered = getFlattened(filtered);
 
-    const filteredB1Income = flatFiltered.filter(t => t.type === 'Pemasukan' && t.treasurer === 'Bendahara 1').reduce((sum, t) => sum + t.amount, 0);
-    const filteredB1Expenses = flatFiltered.filter(t => t.type === 'Pengeluaran' && t.treasurer === 'Bendahara 1').reduce((sum, t) => sum + Math.abs(t.amount), 0);
-    const filteredB1Balance = filteredB1Income - filteredB1Expenses;
+    const income = flatFiltered
+      .filter(t => t.type === 'Pemasukan')
+      .reduce((sum, t) => sum + Math.abs(t.amount), 0);
+    
+    const expenses = flatFiltered
+      .filter(t => t.type === 'Pengeluaran')
+      .reduce((sum, t) => sum + Math.abs(t.amount), 0);
 
-    const filteredB2Income = flatFiltered.filter(t => t.type === 'Pemasukan' && t.treasurer === 'Bendahara 2').reduce((sum, t) => sum + t.amount, 0);
-    const filteredB2Expenses = flatFiltered.filter(t => t.type === 'Pengeluaran' && t.treasurer === 'Bendahara 2').reduce((sum, t) => sum + Math.abs(t.amount), 0);
-    const filteredB2Balance = filteredB2Income - filteredB2Expenses;
-
-    return { filteredTransactions: filtered, totalIncome: income, totalExpenses: expenses, filteredB1Balance, filteredB2Balance };
-  }, [date, groupedTransactions]);
+    return { filteredTransactions: filtered, totalIncome: income, totalExpenses: expenses };
+  }, [date, groupedTransactions, treasurerFilter]);
 
   const handleDialogOpen = (transaction: Transaction | null) => {
     if (isReadOnly || (transaction?.batchId && !transaction.subTransactions)) return;
@@ -425,11 +430,11 @@ export default function TransactionManager({ initialTransactions, members, isRea
                     {date?.from ? (
                       date.to ? (
                         <>
-                          {format(date.from, "LLL dd, y")} -{" "}
-                          {format(date.to, "LLL dd, y")}
+                          {format(date.from, "LLL dd, y", { locale: id })} -{" "}
+                          {format(date.to, "LLL dd, y", { locale: id })}
                         </>
                       ) : (
-                        format(date.from, "LLL dd, y")
+                        format(date.from, "LLL dd, y", { locale: id })
                       )
                     ) : (
                       <span>Pilih rentang tanggal</span>
@@ -448,26 +453,16 @@ export default function TransactionManager({ initialTransactions, members, isRea
                   />
                 </PopoverContent>
               </Popover>
-              <div className="grid grid-cols-2 lg:grid-cols-2 gap-4 flex-1">
-                <Card>
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Total Saldo (B1)</CardTitle>
-                    <Wallet className="h-4 w-4 text-muted-foreground" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className={`text-2xl font-bold ${filteredB1Balance >= 0 ? 'text-green-600' : 'text-destructive'}`}>{formatCurrency(filteredB1Balance)}</div>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Total Saldo (B2)</CardTitle>
-                    <Wallet className="h-4 w-4 text-muted-foreground" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className={`text-2xl font-bold ${filteredB2Balance >= 0 ? 'text-green-600' : 'text-destructive'}`}>{formatCurrency(filteredB2Balance)}</div>
-                  </CardContent>
-                </Card>
-              </div>
+               <Select value={treasurerFilter} onValueChange={setTreasurerFilter}>
+                  <SelectTrigger className="w-full sm:w-[200px]">
+                    <SelectValue placeholder="Filter Bendahara" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Semua">Semua Bendahara</SelectItem>
+                    <SelectItem value="Bendahara 1">Bendahara 1</SelectItem>
+                    <SelectItem value="Bendahara 2">Bendahara 2</SelectItem>
+                  </SelectContent>
+                </Select>
             </div>
 
             <div className="flex justify-between items-center">
@@ -857,7 +852,7 @@ export default function TransactionManager({ initialTransactions, members, isRea
                               variant={"outline"}
                               className={cn("w-[240px] pl-3 text-left font-normal", !field.value && "text-muted-foreground")}
                             >
-                              {field.value ? format(field.value, "PPP") : <span>Pilih tanggal</span>}
+                              {field.value ? format(field.value, "PPP", { locale: id }) : <span>Pilih tanggal</span>}
                               <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                             </Button>
                           </FormControl>
@@ -886,5 +881,7 @@ export default function TransactionManager({ initialTransactions, members, isRea
     </Card>
   );
 }
+
+    
 
     
