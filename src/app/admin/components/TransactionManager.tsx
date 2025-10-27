@@ -292,7 +292,7 @@ export default function TransactionManager({ initialTransactions, members, isRea
     try {
       if (editingTransaction) {
         const updateValues = { ...values, amount: values.type === 'Pengeluaran' ? -values.amount : values.amount };
-        delete updateValues.applyToAll;
+        delete (updateValues as any).applyToAll;
         await updateTransaction(editingTransaction.id, updateValues);
         toast({ title: 'Sukses', description: 'Transaksi berhasil diperbarui.' });
       } else {
@@ -325,7 +325,7 @@ export default function TransactionManager({ initialTransactions, members, isRea
                     setSubmitting(false);
                     return;
                 }
-                await addTransaction({ ...values, amount: -values.amount, treasurer: paymentSource });
+                await addTransaction({ ...values, amount: -values.amount, treasurer: paymentSource as 'Bendahara 1' | 'Bendahara 2' });
                 toast({ title: 'Sukses', description: 'Transaksi baru berhasil ditambahkan.' });
             }
         } else { // Pemasukan
@@ -334,7 +334,7 @@ export default function TransactionManager({ initialTransactions, members, isRea
         }
       }
       setDialogOpen(false);
-    } catch (error: any) => {
+    } catch (error: any) {
       toast({ variant: 'destructive', title: 'Error', description: error.message });
     }
     setSubmitting(false);
@@ -367,7 +367,7 @@ export default function TransactionManager({ initialTransactions, members, isRea
 
         toast({ title: 'Sukses', description: `${selectedTransactions.length} item transaksi berhasil dihapus.` });
         setSelectedTransactions([]);
-    } catch (error) {
+    } catch (error: any) {
         toast({ variant: 'destructive', title: 'Error', description: 'Gagal menghapus transaksi yang dipilih.' });
     }
   };
@@ -745,7 +745,7 @@ export default function TransactionManager({ initialTransactions, members, isRea
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Nama Anggota</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value} disabled={!!editingTransaction}>
+                          <Select onValueChange={field.onChange} value={field.value || ''} disabled={!!editingTransaction}>
                               <FormControl>
                                   <SelectTrigger>
                                       <SelectValue placeholder="Pilih anggota" />
@@ -805,7 +805,7 @@ export default function TransactionManager({ initialTransactions, members, isRea
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Diterima oleh Bendahara</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value}>
+                          <Select onValueChange={field.onChange} value={field.value || 'Bendahara 1'}>
                             <FormControl><SelectTrigger><SelectValue placeholder="Pilih bendahara" /></SelectTrigger></FormControl>
                             <SelectContent>
                                 <SelectItem value="Bendahara 1">Bendahara 1</SelectItem>
@@ -864,7 +864,7 @@ export default function TransactionManager({ initialTransactions, members, isRea
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Dibebankan ke (Opsional)</FormLabel>
-                           <Select onValueChange={field.onChange} value={field.value} disabled={!!editingTransaction}>
+                           <Select onValueChange={field.onChange} value={field.value || ''} disabled={!!editingTransaction}>
                                <FormControl>
                                    <SelectTrigger>
                                        <SelectValue placeholder="Pilih anggota (opsional)" />
@@ -930,5 +930,7 @@ export default function TransactionManager({ initialTransactions, members, isRea
     </Card>
   );
 }
+
+    
 
     
