@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useMemo, useEffect } from 'react';
@@ -56,7 +57,7 @@ import { useToast } from '@/hooks/use-toast';
 import { addTransaction, updateTransaction, deleteTransaction } from '@/lib/actions';
 import type { Member, Transaction } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { PlusCircle, Edit, Trash2, Loader2, CalendarIcon, Users, FileDown, Ban, ArrowUpCircle, ArrowDownCircle } from 'lucide-react';
+import { PlusCircle, Edit, Trash2, Loader2, CalendarIcon, Users, FileDown, Ban, ArrowUpCircle, ArrowDownCircle, Wallet } from 'lucide-react';
 import { format, addDays } from 'date-fns';
 import { id } from 'date-fns/locale';
 import type { DateRange } from 'react-day-picker';
@@ -195,7 +196,7 @@ export default function TransactionManager({ initialTransactions, members, isRea
     return Array.from(transactionMap.values()).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [initialTransactions]);
 
-  const { filteredTransactions, totalIncome, totalExpenses } = useMemo(() => {
+  const { filteredTransactions, totalIncome, totalExpenses, filteredB1Balance, filteredB2Balance } = useMemo(() => {
     const filtered = groupedTransactions.filter(t => {
       if (!date?.from && !date?.to) return true;
       const transactionDate = new Date(t.date);
@@ -220,7 +221,29 @@ export default function TransactionManager({ initialTransactions, members, isRea
       .filter(t => t.type === 'Pengeluaran')
       .reduce((sum, t) => sum + Math.abs(t.totalAmount ?? t.amount), 0);
 
-    return { filteredTransactions: filtered, totalIncome: income, totalExpenses: expenses };
+    const getFlattened = (arr: (Transaction & { memberCount?: number; totalAmount?: number, subTransactions?: Transaction[] })[]) => {
+      const flattened: Transaction[] = [];
+      arr.forEach(t => {
+        if(t.subTransactions && t.subTransactions.length > 0) {
+          flattened.push(...t.subTransactions);
+        } else {
+          flattened.push(t);
+        }
+      });
+      return flattened;
+    }
+
+    const flatFiltered = getFlattened(filtered);
+
+    const filteredB1Income = flatFiltered.filter(t => t.type === 'Pemasukan' && t.treasurer === 'Bendahara 1').reduce((sum, t) => sum + t.amount, 0);
+    const filteredB1Expenses = flatFiltered.filter(t => t.type === 'Pengeluaran' && t.treasurer === 'Bendahara 1').reduce((sum, t) => sum + Math.abs(t.amount), 0);
+    const filteredB1Balance = filteredB1Income - filteredB1Expenses;
+
+    const filteredB2Income = flatFiltered.filter(t => t.type === 'Pemasukan' && t.treasurer === 'Bendahara 2').reduce((sum, t) => sum + t.amount, 0);
+    const filteredB2Expenses = flatFiltered.filter(t => t.type === 'Pengeluaran' && t.treasurer === 'Bendahara 2').reduce((sum, t) => sum + Math.abs(t.amount), 0);
+    const filteredB2Balance = filteredB2Income - filteredB2Expenses;
+
+    return { filteredTransactions: filtered, totalIncome: income, totalExpenses: expenses, filteredB1Balance, filteredB2Balance };
   }, [date, groupedTransactions]);
 
   const handleDialogOpen = (transaction: Transaction | null) => {
@@ -424,7 +447,7 @@ export default function TransactionManager({ initialTransactions, members, isRea
                   />
                 </PopoverContent>
               </Popover>
-              <div className="grid grid-cols-2 gap-4 flex-1">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 flex-1">
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-sm font-medium">Total Pemasukan</CardTitle>
@@ -441,6 +464,24 @@ export default function TransactionManager({ initialTransactions, members, isRea
                   </CardHeader>
                   <CardContent>
                     <div className="text-2xl font-bold text-destructive">{formatCurrency(totalExpenses)}</div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Total Saldo (B1)</CardTitle>
+                    <Wallet className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className={`text-2xl font-bold ${filteredB1Balance >= 0 ? 'text-green-600' : 'text-destructive'}`}>{formatCurrency(filteredB1Balance)}</div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Total Saldo (B2)</CardTitle>
+                    <Wallet className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className={`text-2xl font-bold ${filteredB2Balance >= 0 ? 'text-green-600' : 'text-destructive'}`}>{formatCurrency(filteredB2Balance)}</div>
                   </CardContent>
                 </Card>
               </div>
@@ -852,3 +893,4 @@ export default function TransactionManager({ initialTransactions, members, isRea
     </Card>
   );
 }
+
