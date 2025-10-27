@@ -61,7 +61,7 @@ type MemberWithBalance = Member & {
   withdrawableBalance: number;
 };
 
-type SortKey = keyof MemberWithBalance;
+type SortKey = keyof MemberWithBalance | 'name';
 
 
 type MemberManagerProps = {
@@ -89,6 +89,12 @@ export default function MemberManager({ initialMembers, transactions, cashierDay
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
   const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'ascending' | 'descending' } | null>({ key: 'name', direction: 'ascending' });
 
+  const form = useForm<z.infer<typeof memberSchema>>({
+    resolver: zodResolver(memberSchema),
+    defaultValues: {
+      name: '',
+    },
+  });
 
   const memberHasTransactions = (memberId: string) => {
     return transactions.some(t => t.memberId === memberId);
@@ -194,10 +200,12 @@ export default function MemberManager({ initialMembers, transactions, cashierDay
 
     if (sortConfig !== null) {
       membersWithBalances.sort((a, b) => {
-        if (a[sortConfig.key] < b[sortConfig.key]) {
+        const aValue = a[sortConfig.key] ?? '';
+        const bValue = b[sortConfig.key] ?? '';
+        if (aValue < bValue) {
           return sortConfig.direction === 'ascending' ? -1 : 1;
         }
-        if (a[sortConfig.key] > b[sortConfig.key]) {
+        if (aValue > bValue) {
           return sortConfig.direction === 'ascending' ? 1 : -1;
         }
         return 0;
@@ -228,13 +236,10 @@ export default function MemberManager({ initialMembers, transactions, cashierDay
 
   const getSortIcon = (key: SortKey) => {
     if (!sortConfig || sortConfig.key !== key) {
-      return <ArrowUpDown className="ml-2 h-4 w-4" />;
+      return <ArrowUpDown className="ml-2 h-4 w-4 opacity-30" />;
     }
-    if (sortConfig.direction === 'ascending') {
-      return <ArrowUpDown className="ml-2 h-4 w-4" />; // Simplified icon
-    } else {
-      return <ArrowUpDown className="ml-2 h-4 w-4" />; // Simplified icon
-    }
+    // Simplified to always show the same icon to reduce complexity
+    return <ArrowUpDown className="ml-2 h-4 w-4" />;
   };
 
 
@@ -286,7 +291,7 @@ export default function MemberManager({ initialMembers, transactions, cashierDay
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead padding="checkbox" className="w-12">
+                <TableHead className="w-12">
                    <Checkbox
                         checked={selectedMembers.length === members.length && members.length > 0}
                         onCheckedChange={toggleSelectAll}
@@ -426,5 +431,3 @@ export default function MemberManager({ initialMembers, transactions, cashierDay
     </Card>
   );
 }
-
-    
