@@ -56,8 +56,10 @@ import { useToast } from '@/hooks/use-toast';
 import { addTransaction, updateTransaction, deleteTransaction } from '@/lib/actions';
 import type { Member, Transaction } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { PlusCircle, Edit, Trash2, Loader2, CalendarIcon, Users, FileDown, Ban } from 'lucide-react';
-import { format } from 'date-fns';
+import { PlusCircle, Edit, Trash2, Loader2, CalendarIcon, Users, FileDown, Ban, ArrowUpCircle, ArrowDownCircle } from 'lucide-react';
+import { format, addDays } from 'date-fns';
+import { id } from 'date-fns/locale';
+import type { DateRange } from 'react-day-picker';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -115,6 +117,7 @@ export default function TransactionManager({ initialTransactions, members, isRea
   const [isDialogOpen, setDialogOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [selectedTransactions, setSelectedTransactions] = useState<string[]>([]);
+  const [date, setDate] = useState<DateRange | undefined>();
   
   // State for combined treasurer payment
   const [paymentSource, setPaymentSource] = useState('Bendahara 1');
@@ -191,6 +194,34 @@ export default function TransactionManager({ initialTransactions, members, isRea
 
     return Array.from(transactionMap.values()).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [initialTransactions]);
+
+  const { filteredTransactions, totalIncome, totalExpenses } = useMemo(() => {
+    const filtered = groupedTransactions.filter(t => {
+      if (!date?.from && !date?.to) return true;
+      const transactionDate = new Date(t.date);
+      let from = date?.from;
+      let to = date?.to;
+
+      if (from) from = new Date(from.setHours(0, 0, 0, 0));
+      if (to) to = new Date(to.setHours(23, 59, 59, 999));
+      
+      if (from && to) return transactionDate >= from && transactionDate <= to;
+      if (from) return transactionDate >= from;
+      if (to) return transactionDate <= to;
+
+      return true;
+    });
+
+    const income = filtered
+      .filter(t => t.type === 'Pemasukan')
+      .reduce((sum, t) => sum + Math.abs(t.totalAmount ?? t.amount), 0);
+    
+    const expenses = filtered
+      .filter(t => t.type === 'Pengeluaran')
+      .reduce((sum, t) => sum + Math.abs(t.totalAmount ?? t.amount), 0);
+
+    return { filteredTransactions: filtered, totalIncome: income, totalExpenses: expenses };
+  }, [date, groupedTransactions]);
 
   const handleDialogOpen = (transaction: Transaction | null) => {
     if (isReadOnly || (transaction?.batchId && !transaction.subTransactions)) return;
@@ -300,10 +331,10 @@ export default function TransactionManager({ initialTransactions, members, isRea
   };
 
   const toggleSelectAll = () => {
-    if (selectedTransactions.length === groupedTransactions.length) {
+    if (selectedTransactions.length === filteredTransactions.length) {
         setSelectedTransactions([]);
     } else {
-        setSelectedTransactions(groupedTransactions.map(t => t.id));
+        setSelectedTransactions(filteredTransactions.map(t => t.id));
     }
   };
 
@@ -354,48 +385,111 @@ export default function TransactionManager({ initialTransactions, members, isRea
         <CardDescription>Tambah, edit, atau hapus pemasukan dan pengeluaran kas kelas.</CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="flex justify-between items-center mb-4">
-          <Button variant="outline" onClick={handleExport}>
-            <FileDown className="mr-2 h-4 w-4" /> Ekspor ke XLSX
-          </Button>
-          {!isReadOnly && (
-            <div className="flex items-center gap-2">
-              {selectedTransactions.length > 0 && (
-                  <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                         <Button variant="destructive">
-                           <Trash2 className="mr-2 h-4 w-4" /> Hapus ({selectedTransactions.length})
-                         </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                      <AlertDialogHeader>
-                          <AlertDialogTitle>Anda yakin?</AlertDialogTitle>
-                          <AlertDialogDescription>
-                          Tindakan ini akan menghapus {selectedTransactions.length} item transaksi yang dipilih secara permanen. Transaksi massal akan dihapus untuk semua anggota.
-                          </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                          <AlertDialogCancel>Batal</AlertDialogCancel>
-                          <AlertDialogAction onClick={handleBulkDelete}>
-                          Hapus
-                          </AlertDialogAction>
-                      </AlertDialogFooter>
-                      </AlertDialogContent>
-                  </AlertDialog>
-              )}
-              <Button onClick={() => handleDialogOpen(null)}>
-                <PlusCircle className="mr-2 h-4 w-4" /> Tambah Transaksi
-              </Button>
+        <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row gap-4">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    id="date"
+                    variant={"outline"}
+                    className={cn(
+                      "w-full sm:w-[300px] justify-start text-left font-normal",
+                      !date && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {date?.from ? (
+                      date.to ? (
+                        <>
+                          {format(date.from, "LLL dd, y")} -{" "}
+                          {format(date.to, "LLL dd, y")}
+                        </>
+                      ) : (
+                        format(date.from, "LLL dd, y")
+                      )
+                    ) : (
+                      <span>Pilih rentang tanggal</span>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    initialFocus
+                    mode="range"
+                    defaultMonth={date?.from}
+                    selected={date}
+                    onSelect={setDate}
+                    numberOfMonths={2}
+                    locale={id}
+                  />
+                </PopoverContent>
+              </Popover>
+              <div className="grid grid-cols-2 gap-4 flex-1">
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Total Pemasukan</CardTitle>
+                    <ArrowUpCircle className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-green-600">{formatCurrency(totalIncome)}</div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Total Pengeluaran</CardTitle>
+                    <ArrowDownCircle className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-destructive">{formatCurrency(totalExpenses)}</div>
+                  </CardContent>
+                </Card>
+              </div>
             </div>
-          )}
+
+            <div className="flex justify-between items-center">
+              <Button variant="outline" onClick={handleExport}>
+                <FileDown className="mr-2 h-4 w-4" /> Ekspor ke XLSX
+              </Button>
+              {!isReadOnly && (
+                <div className="flex items-center gap-2">
+                  {selectedTransactions.length > 0 && (
+                      <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                             <Button variant="destructive">
+                               <Trash2 className="mr-2 h-4 w-4" /> Hapus ({selectedTransactions.length})
+                             </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                          <AlertDialogHeader>
+                              <AlertDialogTitle>Anda yakin?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                              Tindakan ini akan menghapus {selectedTransactions.length} item transaksi yang dipilih secara permanen. Transaksi massal akan dihapus untuk semua anggota.
+                              </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                              <AlertDialogCancel>Batal</AlertDialogCancel>
+                              <AlertDialogAction onClick={handleBulkDelete}>
+                              Hapus
+                              </AlertDialogAction>
+                          </AlertDialogFooter>
+                          </AlertDialogContent>
+                      </AlertDialog>
+                  )}
+                  <Button onClick={() => handleDialogOpen(null)}>
+                    <PlusCircle className="mr-2 h-4 w-4" /> Tambah Transaksi
+                  </Button>
+                </div>
+              )}
+            </div>
         </div>
-        <div className="rounded-md border">
+
+        <div className="rounded-md border mt-4">
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead className="w-12">
                    <Checkbox
-                        checked={selectedTransactions.length === groupedTransactions.length && groupedTransactions.length > 0}
+                        checked={selectedTransactions.length === filteredTransactions.length && filteredTransactions.length > 0}
                         onCheckedChange={toggleSelectAll}
                         aria-label="Pilih semua"
                         disabled={isReadOnly}
@@ -410,7 +504,7 @@ export default function TransactionManager({ initialTransactions, members, isRea
               </TableRow>
             </TableHeader>
             <TableBody>
-              {groupedTransactions.map((transaction) => {
+              {filteredTransactions.map((transaction) => {
                 const isSelected = selectedTransactions.includes(transaction.id);
                 const isBulk = !!transaction.batchId;
                 const isCombinedExpense = isBulk && transaction.type === 'Pengeluaran';
