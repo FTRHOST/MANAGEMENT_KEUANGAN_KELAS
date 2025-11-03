@@ -1,7 +1,6 @@
 "use client";
 
-import { useMemo } from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { useMemo, useState } from 'react';
 import {
   Table,
   TableBody,
@@ -10,26 +9,26 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
+import DuesDetailDialog from '@/components/public/DuesDetailDialog';
+import ExpenseDetailDialog from '@/components/public/ExpenseDetailDialog';
 import type { Member, Transaction, CashierDay, Settings } from '@/lib/types';
-import { Wallet, PiggyBank, MinusCircle, TrendingDown, ArrowRight, CheckCircle2, XCircle, FileText, ArrowUpCircle, ArrowDownCircle, Scale } from 'lucide-react';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 
 function formatCurrency(amount: number) {
   return new Intl.NumberFormat('id-ID', {
     style: 'currency',
     currency: 'IDR',
     minimumFractionDigits: 0,
-  }).format(amount);
+  }).format(amount).replace('Rp', 'Rp ');
 }
 
 function formatDate(dateString: string) {
-  return new Date(dateString).toLocaleDateString('id-ID', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  });
+  const date = new Date(dateString);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
+
 
 type PersonalDashboardProps = {
   member: Member;
@@ -39,114 +38,6 @@ type PersonalDashboardProps = {
   totalMembers: number;
 };
 
-// Sub-component for Dues List
-const DuesList = ({ paidDues, unpaidDues, duesAmount }: { paidDues: CashierDay[], unpaidDues: CashierDay[], duesAmount: number }) => (
-    <AccordionItem value="dues">
-        <AccordionTrigger>
-            <div className="flex items-center gap-3">
-                <FileText className="h-5 w-5" />
-                <div>
-                    <h3 className="font-semibold">Rincian Iuran Wajib</h3>
-                    <p className="text-sm text-muted-foreground">Status pembayaran iuran rutin Anda.</p>
-                </div>
-            </div>
-        </AccordionTrigger>
-        <AccordionContent>
-            {paidDues.length === 0 && unpaidDues.length === 0 ? (
-                 <p className="text-muted-foreground text-center py-4">Belum ada data hari kas yang ditambahkan oleh admin.</p>
-            ) : (
-                <div className="space-y-4 pt-2">
-                    {unpaidDues.length > 0 && (
-                        <div>
-                            <h4 className="font-semibold mb-2">Iuran Belum Dibayar ({formatCurrency(unpaidDues.length * duesAmount)})</h4>
-                            <ul className="space-y-2">
-                                {unpaidDues.map(day => (
-                                    <li key={day.id} className="flex justify-between items-center p-2 rounded-md bg-red-50 dark:bg-destructive/10">
-                                        <div className="flex items-center gap-2">
-                                            <XCircle className="h-4 w-4 text-destructive" />
-                                            <span>{day.description}</span>
-                                        </div>
-                                        <span className="text-sm font-medium text-destructive">({formatCurrency(day.duesAmount || duesAmount)})</span>
-                                    </li>
-                                ))}
-                            </ul>
-                        </div>
-                    )}
-                    {paidDues.length > 0 && (
-                       <div>
-                            <h4 className="font-semibold mb-2">Iuran Lunas</h4>
-                             <ul className="space-y-2">
-                                {paidDues.map(day => (
-                                     <li key={day.id} className="flex justify-between items-center p-2 rounded-md bg-green-50 dark:bg-green-500/10">
-                                        <div className="flex items-center gap-2">
-                                            <CheckCircle2 className="h-4 w-4 text-green-600" />
-                                            <span>{day.description}</span>
-                                        </div>
-                                        <span className="text-sm text-muted-foreground">({formatCurrency(day.duesAmount || duesAmount)})</span>
-                                    </li>
-                                ))}
-                            </ul>
-                       </div>
-                    )}
-                </div>
-            )}
-        </AccordionContent>
-    </AccordionItem>
-);
-
-// Sub-component for Expenses List
-const ExpensesList = ({ personalExpenses, sharedTransactions, sharedExpensePerMember, totalMembers }: { personalExpenses: Transaction[], sharedTransactions: (Transaction & { displayAmount?: number })[], sharedExpensePerMember: number, totalMembers: number }) => (
-     <AccordionItem value="expenses">
-        <AccordionTrigger>
-             <div className="flex items-center gap-3">
-                <TrendingDown className="h-5 w-5" />
-                <div>
-                    <h3 className="font-semibold">Rincian Beban Pengeluaran</h3>
-                    <p className="text-sm text-muted-foreground">Pengeluaran pribadi dan bersama yang ditanggung.</p>
-                </div>
-            </div>
-        </AccordionTrigger>
-        <AccordionContent>
-             <div className="space-y-4 pt-2">
-                {personalExpenses.length > 0 && (
-                    <div>
-                        <h4 className="font-semibold mb-1">Pengeluaran Pribadi</h4>
-                        <ul className="divide-y divide-border">
-                            {personalExpenses.map(tx => (
-                                <li key={tx.id} className="flex justify-between items-center py-2">
-                                    <span>{tx.description}</span>
-                                    <span className="font-medium">{formatCurrency(tx.amount)}</span>
-                                </li>
-                            ))}
-                        </ul>
-                    </div>
-                )}
-                 <div>
-                    <div className="flex justify-between items-center">
-                        <h4 className="font-semibold">Beban Pengeluaran Bersama</h4>
-                        <span className="font-semibold">{formatCurrency(sharedExpensePerMember)}</span>
-                    </div>
-                    {sharedTransactions && sharedTransactions.length > 0 ? (
-                        <ul className="divide-y divide-border text-sm mt-1">
-                            {sharedTransactions.map(tx => (
-                                <li key={tx.id} className="flex justify-between items-center py-2">
-                                    <div className="text-muted-foreground">
-                                        <span>{tx.description}</span>
-                                        {totalMembers > 0 && <span className="text-xs block opacity-80">({formatCurrency(tx.displayAmount || tx.amount)} / {totalMembers} orang)</span>}
-                                    </div>
-                                    <span className="font-medium text-muted-foreground">{totalMembers > 0 ? formatCurrency((tx.displayAmount || tx.amount) / totalMembers) : formatCurrency(0)}</span>
-                                </li>
-                            ))}
-                        </ul>
-                    ) : (
-                        <p className="text-sm text-muted-foreground text-center py-3">Tidak ada pengeluaran bersama.</p>
-                    )}
-                </div>
-            </div>
-        </AccordionContent>
-    </AccordionItem>
-);
-
 export function PersonalDashboard({
   member,
   allTransactions,
@@ -154,6 +45,9 @@ export function PersonalDashboard({
   settings,
   totalMembers
 }: PersonalDashboardProps) {
+
+  const [isDuesDetailOpen, setDuesDetailOpen] = useState(false);
+  const [isExpenseDetailOpen, setExpenseDetailOpen] = useState(false);
 
   const duesPerMeeting = settings.duesAmount || 0;
 
@@ -171,7 +65,6 @@ export function PersonalDashboard({
     totalClassExpenses,
     classFinalBalance,
   } = useMemo(() => {
-    // Class-wide calculations
     const totalClassIncome = allTransactions
       .filter(t => t.type === 'Pemasukan')
       .reduce((sum, t) => sum + t.amount, 0);
@@ -182,18 +75,14 @@ export function PersonalDashboard({
       
     const classFinalBalance = totalClassIncome - totalClassExpenses;
 
-    // Personal calculations for the logged-in member
-    // Total uang yang sudah dibayar anggota
     const totalPaid = allTransactions
       .filter(t => t.memberId === member.id && t.type === 'Pemasukan')
       .reduce((sum, t) => sum + t.amount, 0);
 
-    // Semua transaksi pembayaran iuran oleh anggota
     const paymentTransactions = allTransactions.filter(
         (t) => t.memberId === member.id && t.type === 'Pemasukan'
     );
     
-    // Menandai hari kas mana yang sudah lunas
     let paidDuesCount = Math.floor(totalPaid / duesPerMeeting);
     const sortedCashierDays = [...cashierDays].sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     
@@ -210,24 +99,19 @@ export function PersonalDashboard({
         }
     });
 
-    // Total iuran yang seharusnya dibayar
     const totalDuesLiability = cashierDays.reduce((sum, day) => sum + (day.duesAmount || duesPerMeeting), 0);
     
-    // Tunggakan iuran wajib
     const unpaidDuesAmount = Math.max(0, totalDuesLiability - totalPaid);
 
-    // Total pengeluaran pribadi
     const personalExpenses = allTransactions.filter(
       t => t.memberId === member.id && t.type === 'Pengeluaran'
     );
     const personalExpensesTotal = personalExpenses.reduce((sum, t) => sum + t.amount, 0);
 
-    // Total pengeluaran bersama dibagi rata
     const rawSharedTransactions = allTransactions.filter(t => t.type === 'Pengeluaran' && !t.memberId);
     const sharedExpensesTotal = rawSharedTransactions.reduce((sum, t) => sum + Math.abs(t.amount), 0);
     const sharedExpensePerMember = totalMembers > 0 ? sharedExpensesTotal / totalMembers : 0;
 
-    // Group shared transactions for display in the accordion
     const sharedTransactionMap = new Map<string, Transaction & { displayAmount?: number }>();
     rawSharedTransactions.forEach(t => {
       const key = t.batchId || t.id;
@@ -240,10 +124,8 @@ export function PersonalDashboard({
     });
     const sharedTransactions = Array.from(sharedTransactionMap.values()).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-    // Total semua beban pengeluaran
     const totalExpenses = Math.abs(personalExpensesTotal) + sharedExpensePerMember;
 
-    // Sisa kas yang dapat ditarik
     const withdrawableBalance = Math.max(0, totalPaid - totalExpenses);
 
     return {
@@ -254,7 +136,7 @@ export function PersonalDashboard({
       personalExpenses,
       sharedTransactions,
       sharedExpensePerMember,
-      paidDues: paidDues.reverse(), // Show latest paid first
+      paidDues: paidDues.reverse(),
       unpaidDues,
       totalClassIncome,
       totalClassExpenses,
@@ -264,148 +146,107 @@ export function PersonalDashboard({
 
 
   return (
-    <div className="space-y-8">
-       <div className="text-center">
-            <h1 className="text-3xl font-bold font-headline">Halo, {member.name}!</h1>
-            <p className="text-muted-foreground">Ini adalah ringkasan keuangan pribadimu di kelas.</p>
-        </div>
-
-      <div>
-        <h2 className="text-2xl font-bold text-center mb-4 font-headline">Ringkasan Keuangan Kelas</h2>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Pemasukan Kelas</CardTitle>
-                <ArrowUpCircle className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-green-600">{formatCurrency(totalClassIncome)}</div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Pengeluaran Kelas</CardTitle>
-                <ArrowDownCircle className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-destructive">{formatCurrency(totalClassExpenses)}</div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Saldo Kas Kelas</CardTitle>
-                <Scale className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{formatCurrency(classFinalBalance)}</div>
-              </CardContent>
-            </Card>
+    <>
+      <div className="flex flex-wrap justify-between gap-3 px-4 md:px-6">
+        <div className="flex min-w-72 flex-col gap-2">
+          <p className="text-text-primary text-3xl font-bold leading-tight tracking-tight">Halo, {member.name}!</p>
+          <p className="text-text-secondary text-base font-normal leading-normal">Berikut adalah ringkasan status keuangan pribadi Anda di dalam kelas.</p>
         </div>
       </div>
-
-      <div>
-        <h2 className="text-2xl font-bold text-center mb-4 font-headline">Ringkasan Keuangan Pribadi</h2>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Tunggakan Iuran</CardTitle>
-              <MinusCircle className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-destructive">
-                {formatCurrency(unpaidDuesAmount)}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Total iuran wajib yang belum dibayar.
-              </p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Beban Pengeluaran</CardTitle>
-              <TrendingDown className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {formatCurrency(totalExpenses)}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Pengeluaran pribadi & bagian pengeluaran bersama.
-              </p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Sisa Kas (Dapat Ditarik)</CardTitle>
-              <Wallet className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-green-600">
-                  {formatCurrency(withdrawableBalance)}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Sisa uang setelah dikurangi semua beban pengeluaran.
-              </p>
-            </CardContent>
-          </Card>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 px-4 md:px-6">
+        <div className="flex flex-col gap-6 p-6 rounded-xl border border-border-color bg-card shadow-md">
+          <h3 className="text-text-primary text-xl font-semibold">Class Financial Summary</h3>
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1.5 rounded-lg p-4 border border-border-color">
+              <p className="text-text-secondary text-sm font-medium leading-normal">Total Pemasukan Kelas</p>
+              <p className="text-text-primary tracking-tight text-2xl font-bold leading-tight">{formatCurrency(totalClassIncome)}</p>
+            </div>
+            <div className="flex flex-col gap-1.5 rounded-lg p-4 border border-border-color">
+              <p className="text-text-secondary text-sm font-medium leading-normal">Total Pengeluaran Kelas</p>
+              <p className="text-text-primary tracking-tight text-2xl font-bold leading-tight">{formatCurrency(totalClassExpenses)}</p>
+            </div>
+            <div className="flex flex-col gap-1.5 rounded-lg p-4 border border-border-color bg-gray-50">
+              <p className="text-text-secondary text-sm font-medium leading-normal">Saldo Kas Kelas</p>
+              <p className="text-text-primary tracking-tight text-2xl font-bold leading-tight">{formatCurrency(classFinalBalance)}</p>
+            </div>
+          </div>
+        </div>
+        <div className="flex flex-col gap-6 p-6 rounded-xl border border-border-color bg-card shadow-md">
+          <h3 className="text-text-primary text-xl font-semibold">Personal Financial Summary</h3>
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1.5 rounded-lg p-4 border border-border-color">
+              <p className="text-text-secondary text-sm font-medium leading-normal">Total Tunggakan Iuran</p>
+              <p className="text-danger tracking-tight text-2xl font-bold leading-tight">{formatCurrency(unpaidDuesAmount)}</p>
+            </div>
+            <div className="flex flex-col gap-1.5 rounded-lg p-4 border border-border-color">
+              <p className="text-text-secondary text-sm font-medium leading-normal">Total Beban Pengeluaran</p>
+              <p className="text-text-primary tracking-tight text-2xl font-bold leading-tight">{formatCurrency(totalExpenses)}</p>
+            </div>
+            <div className="flex flex-col gap-1.5 rounded-lg p-4 border border-border-color bg-gray-50">
+              <p className="text-text-secondary text-sm font-medium leading-normal">Sisa Kas / Dapat Ditarik</p>
+              <p className="text-success tracking-tight text-2xl font-bold leading-tight">{formatCurrency(withdrawableBalance)}</p>
+            </div>
+          </div>
         </div>
       </div>
-
-       <Card>
-            <CardHeader>
-                <CardTitle>Rincian Keuangan</CardTitle>
-                <CardDescription>Detail dari semua iuran, pengeluaran, dan pembayaran Anda.</CardDescription>
-            </CardHeader>
-            <CardContent>
-                 <Accordion type="multiple" className="w-full">
-                   <DuesList paidDues={paidDues} unpaidDues={unpaidDues} duesAmount={duesPerMeeting} />
-                   <ExpensesList personalExpenses={personalExpenses} sharedTransactions={sharedTransactions} sharedExpensePerMember={sharedExpensePerMember} totalMembers={totalMembers} />
-                </Accordion>
-            </CardContent>
-        </Card>
-
-      <div>
-        <h2 className="text-2xl font-bold mb-4 font-headline">Riwayat Transaksi Pribadi</h2>
-        <div className="rounded-md border">
+      <div className="flex justify-stretch">
+        <div className="flex flex-1 gap-4 flex-wrap px-4 md:px-6 py-3 justify-start">
+          <button onClick={() => setDuesDetailOpen(true)} className="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-5 bg-white text-text-secondary text-sm font-semibold leading-normal border border-border-color hover:bg-gray-50 hover:text-text-primary transition-colors duration-200 shadow-sm">
+            <span className="truncate">Rincian Iuran Wajib</span>
+          </button>
+          <button onClick={() => setExpenseDetailOpen(true)} className="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-5 bg-white text-text-secondary text-sm font-semibold leading-normal border border-border-color hover:bg-gray-50 hover:text-text-primary transition-colors duration-200 shadow-sm">
+            <span className="truncate">Rincian Beban Pengeluaran</span>
+          </button>
+        </div>
+      </div>
+      <div className="flex flex-col gap-4 p-4 md:px-6">
+        <h3 className="text-text-primary text-xl font-semibold">Riwayat Transaksi Pribadi</h3>
+        <div className="overflow-x-auto rounded-xl border border-border-color bg-card shadow-md">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Tanggal</TableHead>
-                <TableHead>Tipe</TableHead>
-                <TableHead>Deskripsi</TableHead>
-                <TableHead className="text-right">Jumlah</TableHead>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-text-secondary uppercase tracking-wider" scope="col">Tanggal</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-text-secondary uppercase tracking-wider" scope="col">Tipe</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-text-secondary uppercase tracking-wider" scope="col">Deskripsi</th>
+                <th className="px-6 py-3 text-right text-xs font-semibold text-text-secondary uppercase tracking-wider" scope="col">Jumlah</th>
               </TableRow>
             </TableHeader>
             <TableBody>
               {allTransactions
                 .filter(t => t.memberId === member.id)
-                .map(t => (
-                  <TableRow key={t.id}>
-                    <TableCell>{formatDate(t.date)}</TableCell>
-                    <TableCell>
-                      <Badge variant={t.type === 'Pemasukan' ? 'default' : 'destructive'}
-                       className={`${t.type === 'Pemasukan' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}
-                      >
-                        {t.type}
-                      </Badge>
+                .map((t, index) => (
+                  <TableRow key={t.id} className={index % 2 === 1 ? 'bg-gray-50/50' : ''}>
+                    <TableCell className="px-6 py-4 whitespace-nowrap text-sm text-text-secondary">{formatDate(t.date)}</TableCell>
+                    <TableCell className="px-6 py-4 whitespace-nowrap">
+                      <span className={`px-2.5 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${t.type === 'Pemasukan' ? 'bg-success-bg text-success' : 'bg-danger-bg text-danger'}`}>
+                        {t.type === 'Pemasukan' ? 'Iuran' : 'Pengeluaran'}
+                      </span>
                     </TableCell>
-                    <TableCell>{t.description}</TableCell>
-                    <TableCell className={`text-right font-semibold ${t.type === 'Pemasukan' ? 'text-green-600' : 'text-destructive'}`}>
-                      {t.type === 'Pemasukan' ? '+' : '-'} {formatCurrency(t.amount)}
+                    <TableCell className="px-6 py-4 whitespace-nowrap text-sm text-text-primary font-medium">{t.description}</TableCell>
+                    <TableCell className={`px-6 py-4 whitespace-nowrap text-sm font-medium text-right ${t.type === 'Pemasukan' ? 'text-success' : 'text-danger'}`}>
+                      {t.type === 'Pemasukan' ? '+' : '-'} {formatCurrency(Math.abs(t.amount))}
                     </TableCell>
                   </TableRow>
                 ))}
-                {allTransactions.filter(t => t.memberId === member.id).length === 0 && (
-                    <TableRow>
-                        <TableCell colSpan={4} className="text-center text-muted-foreground">
-                            Belum ada riwayat transaksi.
-                        </TableCell>
-                    </TableRow>
-                )}
             </TableBody>
           </Table>
         </div>
       </div>
-    </div>
+      <DuesDetailDialog
+        isOpen={isDuesDetailOpen}
+        onOpenChange={setDuesDetailOpen}
+        paidDues={paidDues}
+        unpaidDues={unpaidDues}
+        duesAmount={duesPerMeeting}
+      />
+      <ExpenseDetailDialog
+        isOpen={isExpenseDetailOpen}
+        onOpenChange={setExpenseDetailOpen}
+        personalExpenses={personalExpenses}
+        sharedTransactions={sharedTransactions}
+        sharedExpensePerMember={sharedExpensePerMember}
+        totalMembers={totalMembers}
+      />
+    </>
   );
 }

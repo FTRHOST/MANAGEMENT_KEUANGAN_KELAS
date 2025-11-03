@@ -7,6 +7,7 @@ import { notFound } from 'next/navigation';
 import { getCashierDays, getSettings } from '@/lib/actions';
 
 async function getData(memberId: string) {
+  console.log('memberId', memberId);
   const memberRef = doc(db, 'members', memberId);
   const memberSnap = await getDoc(memberRef);
 
@@ -47,6 +48,7 @@ export default async function AnggotaPage({ params }: { params: { id: string } }
   return (
     <div className="space-y-8">
       <PersonalDashboard
+        key={member.id}
         member={member}
         allTransactions={transactions}
         cashierDays={cashierDays}

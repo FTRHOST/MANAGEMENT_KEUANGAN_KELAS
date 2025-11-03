@@ -1,24 +1,13 @@
-
-"use client";
-
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
-  DialogFooter,
 } from '@/components/ui/dialog';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { CashierDay } from '@/lib/types';
+import { CheckCircle2, XCircle } from 'lucide-react';
 
 function formatCurrency(amount: number) {
   return new Intl.NumberFormat('id-ID', {
@@ -31,78 +20,56 @@ function formatCurrency(amount: number) {
 type DuesDetailDialogProps = {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
-  arrearsDetails: { description: string; amount: number; type: 'Dues' | 'Shared' | 'Personal' }[];
+  paidDues: CashierDay[];
+  unpaidDues: CashierDay[];
   duesAmount: number;
 };
 
-export function DuesDetailDialog({
-  isOpen,
-  onOpenChange,
-  arrearsDetails,
-  duesAmount,
-}: DuesDetailDialogProps) {
-
-  const totalArrears = arrearsDetails.reduce((sum, item) => sum + item.amount, 0);
-
-  const getBadge = (type: 'Dues' | 'Shared' | 'Personal') => {
-    switch (type) {
-        case 'Dues':
-            return <Badge variant="outline">Iuran Wajib</Badge>;
-        case 'Shared':
-            return <Badge variant="secondary">Beban Kelas</Badge>;
-        case 'Personal':
-            return <Badge variant="destructive">Beban Pribadi</Badge>;
-        default:
-            return null;
-    }
-  }
-
+export default function DuesDetailDialog({ isOpen, onOpenChange, paidDues, unpaidDues, duesAmount }: DuesDetailDialogProps) {
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent>
         <DialogHeader>
-          <DialogTitle>Rincian Tagihan</DialogTitle>
+          <DialogTitle>Rincian Iuran Wajib</DialogTitle>
           <DialogDescription>
-            Berikut adalah rincian dari semua tagihan yang belum Anda selesaikan, termasuk iuran wajib, beban kelas, dan beban pribadi.
+            Status pembayaran iuran rutin Anda.
           </DialogDescription>
         </DialogHeader>
-        <div className="max-h-[60vh] overflow-y-auto">
-            <Table>
-                <TableHeader>
-                    <TableRow>
-                        <TableHead>Deskripsi</TableHead>
-                        <TableHead>Tipe</TableHead>
-                        <TableHead className="text-right">Jumlah</TableHead>
-                    </TableRow>
-                </TableHeader>
-                <TableBody>
-                {arrearsDetails.length > 0 ? (
-                    arrearsDetails.map((item, index) => (
-                    <TableRow key={index}>
-                        <TableCell>{item.description}</TableCell>
-                        <TableCell>{getBadge(item.type)}</TableCell>
-                        <TableCell className="text-right font-medium text-destructive">
-                        {formatCurrency(item.amount)}
-                        </TableCell>
-                    </TableRow>
-                    ))
-                ) : (
-                    <TableRow>
-                    <TableCell colSpan={3} className="text-center">
-                        Tidak ada tagihan.
-                    </TableCell>
-                    </TableRow>
-                )}
-                </TableBody>
-            </Table>
+        <div className="space-y-4 pt-2">
+          {unpaidDues.length > 0 && (
+            <div>
+              <h4 className="font-semibold mb-2">Iuran Belum Dibayar ({formatCurrency(unpaidDues.length * duesAmount)})</h4>
+              <ul className="space-y-2">
+                {unpaidDues.map(day => (
+                  <li key={day.id} className="flex justify-between items-center p-2 rounded-md bg-red-50 dark:bg-destructive/10">
+                    <div className="flex items-center gap-2">
+                      <XCircle className="h-4 w-4 text-destructive" />
+                      <span>{day.description}</span>
+                    </div>
+                    <span className="text-sm font-medium text-destructive">({formatCurrency(day.duesAmount || duesAmount)})</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {paidDues.length > 0 && (
+            <div>
+              <h4 className="font-semibold mb-2">Iuran Lunas</h4>
+              <ul className="space-y-2">
+                {paidDues.map(day => (
+                  <li key={day.id} className="flex justify-between items-center p-2 rounded-md bg-green-50 dark:bg-green-500/10">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="h-4 w-4 text-green-600" />
+                      <span>{day.description}</span>
+                    </div>
+                    <span className="text-sm text-muted-foreground">({formatCurrency(day.duesAmount || duesAmount)})</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
-        <DialogFooter className="sm:justify-between border-t pt-4">
-          <div className="text-lg font-bold">Total Tagihan</div>
-          <div className="text-lg font-bold text-destructive">{formatCurrency(totalArrears)}</div>
-        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
-
-    

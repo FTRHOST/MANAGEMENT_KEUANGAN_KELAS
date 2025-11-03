@@ -21,7 +21,7 @@ export default function HomePage({ members, settings }: HomePageProps) {
   const router = useRouter();
 
   const filteredMembers = useMemo(() => {
-    if (!searchQuery) return [];
+    if (!searchQuery) return members; // Show all members by default
     const lowercasedQuery = searchQuery.toLowerCase();
     
     const directMatches = members.filter(member =>
@@ -101,33 +101,31 @@ export default function HomePage({ members, settings }: HomePageProps) {
           />
         </div>
 
-        {searchQuery && (
-          <Card className="mt-2 text-left">
-             <ScrollArea className="h-72">
-              <CardContent className="p-2">
-                {isLoadingAi && filteredMembers.length === 0 && (
-                  <div className="p-4 text-center text-sm text-muted-foreground">Mencari saran nama...</div>
-                )}
-                {!isLoadingAi && filteredMembers.length === 0 && (
-                  <div className="p-4 text-center text-sm text-muted-foreground">Anggota tidak ditemukan.</div>
-                )}
-                {filteredMembers.map(member => (
-                  <div
-                    key={member.id}
-                    onClick={() => handleSelectMember(member.id)}
-                    className="flex items-center p-3 rounded-lg hover:bg-muted cursor-pointer"
-                  >
-                    <User className="mr-3 h-5 w-5 text-muted-foreground" />
-                    <div className="flex flex-col">
-                        <span className="font-medium">{member.name}</span>
-                        {member.nim && <span className="text-xs text-muted-foreground">{member.nim}</span>}
-                    </div>
+        <Card className="mt-2 text-left">
+           <ScrollArea className="h-72">
+            <CardContent className="p-2">
+              {isLoadingAi && filteredMembers.length === 0 && (
+                <div className="p-4 text-center text-sm text-muted-foreground">Mencari saran nama...</div>
+              )}
+              {!isLoadingAi && filteredMembers.length === 0 && (
+                <div className="p-4 text-center text-sm text-muted-foreground">Anggota tidak ditemukan.</div>
+              )}
+              {filteredMembers.map(member => (
+                <div
+                  key={member.id}
+                  onClick={() => handleSelectMember(member.id)}
+                  className="flex items-center p-3 rounded-lg hover:bg-muted cursor-pointer"
+                >
+                  <User className="mr-3 h-5 w-5 text-muted-foreground" />
+                  <div className="flex flex-col">
+                      <span className="font-medium">{member.name}</span>
+                      {member.nim && <span className="text-xs text-muted-foreground">{member.nim}</span>}
                   </div>
-                ))}
-              </CardContent>
-            </ScrollArea>
-          </Card>
-        )}
+                </div>
+              ))}
+            </CardContent>
+          </ScrollArea>
+        </Card>
       </div>
     </div>
   );
