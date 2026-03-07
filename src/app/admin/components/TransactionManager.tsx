@@ -108,7 +108,7 @@ const transactionSchema = z.object({
   applyToAll: z.boolean().optional(),
 }).refine(data => {
     if (data.type === 'Pemasukan' && !data.applyToAll) {
-        return !!data.memberId;
+        return data.memberId && data.memberId.trim() !== "";
     }
     return true;
 }, {
@@ -718,7 +718,10 @@ export default function TransactionManager({ initialTransactions, members, isRea
                       <FormControl>
                         <RadioGroup onValueChange={(value) => {
                             field.onChange(value);
-                            if (value === 'Pengeluaran') form.setValue('applyToAll', false);
+                            if (value === 'Pengeluaran') {
+                                form.setValue('applyToAll', false);
+                                form.setValue('memberId', ''); // Reset member selection when switching to Pengeluaran
+                            }
                         }} defaultValue={field.value} className="flex space-x-4">
                           <FormItem className="flex items-center space-x-2 space-y-0">
                             <FormControl><RadioGroupItem value="Pemasukan" /></FormControl>
@@ -881,14 +884,14 @@ export default function TransactionManager({ initialTransactions, members, isRea
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Dibebankan ke (Opsional)</FormLabel>
-                           <Select onValueChange={field.onChange} value={field.value || ''} disabled={!!editingTransaction}>
+                           <Select onValueChange={(val) => field.onChange(val === 'none' ? '' : val)} value={field.value || 'none'} disabled={!!editingTransaction}>
                                <FormControl>
                                    <SelectTrigger>
                                        <SelectValue placeholder="Pilih anggota (opsional)" />
                                    </SelectTrigger>
                                </FormControl>
                                <SelectContent>
-                                   <SelectItem value="">Pengeluaran Bersama</SelectItem>
+                                   <SelectItem value="none">Pengeluaran Bersama</SelectItem>
                                    {members.map(member => (
                                        <SelectItem key={member.id} value={member.id}>
                                            {member.name} {member.nim ? `(${member.nim})` : ''}
