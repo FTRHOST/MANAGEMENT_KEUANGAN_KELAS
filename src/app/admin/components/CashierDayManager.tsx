@@ -48,10 +48,10 @@ import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { useToast } from '@/hooks/use-toast';
-import { addCashierDay, deleteCashierDay } from '@/lib/actions';
+import { addCashierDay, deleteCashierDay, updateCashierDay } from '@/lib/actions';
 import type { CashierDay, Member } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { PlusCircle, Trash2, Loader2, CalendarIcon, FileDown, ClipboardCopy } from 'lucide-react';
+import { PlusCircle, Trash2, Loader2, CalendarIcon, FileDown, ClipboardCopy, Edit } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { exportToXLSX } from '@/lib/export';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -104,6 +104,7 @@ export default function CashierDayManager({ initialCashierDays, members, isReadO
   const [isSubmitting, setSubmitting] = useState(false);
   const [isDialogOpen, setDialogOpen] = useState(false);
   const [selectedDays, setSelectedDays] = useState<string[]>([]);
+  const [editingCashierDay, setEditingCashierDay] = useState<CashierDay | null>(null);
 
   const form = useForm<z.infer<typeof cashierDaySchema>>({
     resolver: zodResolver(cashierDaySchema),
@@ -112,8 +113,25 @@ export default function CashierDayManager({ initialCashierDays, members, isReadO
 
   const duesAmountOption = form.watch('duesAmountOption');
   
-  const handleDialogOpen = () => {
+  const handleDialogOpen = (cashierDay: CashierDay | null = null) => {
     if (isReadOnly) return;
+    setEditingCashierDay(cashierDay);
+    if (cashierDay) {
+        const amountOption = [2000, 4000, 6000].includes(cashierDay.duesAmount || 0)
+            ? String(cashierDay.duesAmount)
+            : 'custom';
+
+        form.reset({
+            description: cashierDay.description,
+            date: new Date(cashierDay.date),
+            duesAmountOption: amountOption,
+            customDuesAmount: amountOption === 'custom' ? cashierDay.duesAmount : undefined,
+            applyToAll: !cashierDay.memberIds || cashierDay.memberIds.length === 0,
+            memberIds: cashierDay.memberIds || []
+        });
+    } else {
+        form.reset({ description: '', date: new Date(), duesAmountOption: '2000', customDuesAmount: undefined, applyToAll: true, memberIds: [] });
+    }
     setDialogOpen(true);
   };
 
@@ -131,12 +149,20 @@ export default function CashierDayManager({ initialCashierDays, members, isReadO
           memberIds: values.applyToAll ? [] : values.memberIds
       };
 
-      await addCashierDay(payload);
+      if (editingCashierDay) {
+        await updateCashierDay(editingCashierDay.id, payload);
+        toast({ title: 'Sukses', description: 'Hari kas berhasil diperbarui.' });
+        // Update local state since it does not re-fetch immediately on client
+        setCashierDays(cashierDays.map(day => day.id === editingCashierDay.id ? { ...day, ...payload, date: payload.date.toISOString() } : day));
+      } else {
+        await addCashierDay(payload);
+        toast({ title: 'Sukses', description: 'Hari kas baru berhasil ditambahkan.' });
+      }
       
-      toast({ title: 'Sukses', description: 'Hari kas baru berhasil ditambahkan.' });
       setDialogOpen(false);
       form.reset({ description: '', date: new Date(), duesAmountOption: '2000', customDuesAmount: undefined, applyToAll: true, memberIds: [] });
-      // Revalidation will update the list
+      setEditingCashierDay(null);
+      // Revalidation will update the list from server next time
     } catch (error: any) {
       toast({ variant: 'destructive', title: 'Error', description: error.message });
     }
@@ -244,7 +270,7 @@ Terima kasih atas perhatiannya! 🙏`;
                       </AlertDialogContent>
                   </AlertDialog>
               )}
-              <Button onClick={handleDialogOpen}>
+              <Button onClick={() => handleDialogOpen(null)}>
                 <PlusCircle className="mr-2 h-4 w-4" /> Tambah Hari Kas
               </Button>
             </div>
@@ -299,6 +325,19 @@ Terima kasih atas perhatiannya! 🙏`;
                     </TooltipProvider>
                     
                     {!isReadOnly && (
+                      <>
+                        <TooltipProvider>
+                           <Tooltip>
+                             <TooltipTrigger asChild>
+                               <Button variant="ghost" size="icon" onClick={() => handleDialogOpen(day)}>
+                                 <Edit className="h-4 w-4" />
+                               </Button>
+                             </TooltipTrigger>
+                             <TooltipContent>
+                               <p>Edit Hari Kas</p>
+                             </TooltipContent>
+                           </Tooltip>
+                        </TooltipProvider>
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
                           <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive">
@@ -320,6 +359,7 @@ Terima kasih atas perhatiannya! 🙏`;
                           </AlertDialogFooter>
                         </AlertDialogContent>
                       </AlertDialog>
+                      </>
                     )}
                   </TableCell>
                 </TableRow>
@@ -331,7 +371,7 @@ Terima kasih atas perhatiannya! 🙏`;
         <Dialog open={isDialogOpen} onOpenChange={setDialogOpen}>
             <DialogContent>
                 <DialogHeader>
-                    <DialogTitle>Tambah Hari Kas Baru</DialogTitle>
+                    <DialogTitle>{editingCashierDay ? 'Edit Hari Kas' : 'Tambah Hari Kas Baru'}</DialogTitle>
                 </DialogHeader>
                 <Form {...form}>
                     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -505,7 +545,7 @@ Terima kasih atas perhatiannya! 🙏`;
                             </DialogClose>
                             <Button type="submit" disabled={isSubmitting}>
                                 {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                Tambah
+                                {editingCashierDay ? 'Simpan Perubahan' : 'Tambah'}
                             </Button>
                         </DialogFooter>
                     </form>

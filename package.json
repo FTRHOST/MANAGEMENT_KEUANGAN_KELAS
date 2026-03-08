@@ -64,6 +64,7 @@
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
+    "@types/uuid": "^10.0.0",
     "eslint": "^9.38.0",
     "eslint-config-next": "^16.0.0",
     "genkit-cli": "^1.14.1",
