@@ -16,6 +16,7 @@ import {
   setDoc,
   writeBatch,
   orderBy,
+  deleteField,
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { Member, Transaction, TransactionData, Settings, CashierDay } from '@/lib/types';
@@ -314,6 +315,49 @@ export async function getCashierDays(): Promise<CashierDay[]> {
  * Adds a new cashier day to the Firestore database.
  * @param data - The cashier day object to add.
  * @returns {Promise<{error: string} | undefined>} A promise that resolves to an error object if the date or description is empty, otherwise undefined.
+ */
+/**
+ * Updates an existing cashier day in the database.
+ * @param {string} id - The ID of the cashier day to update.
+ * @param {object} data - The updated data.
+ * @param {Date} data.date - The date of the cashier day.
+ * @param {string} data.description - The description of the cashier day.
+ * @param {number} data.duesAmount - The dues amount.
+ * @param {string[]} [data.memberIds] - The list of members this applies to.
+ * @returns {Promise<void | { error: string }>} A promise that resolves when the update is complete.
+ */
+export async function updateCashierDay(id: string, data: { date: Date; description: string; duesAmount: number; memberIds?: string[] }) {
+    if (!data.date || !data.description) {
+        return { error: 'Tanggal dan deskripsi tidak boleh kosong.' };
+    }
+
+    const docData: any = {
+        date: Timestamp.fromDate(data.date),
+        description: data.description,
+        duesAmount: data.duesAmount
+    };
+
+    if (data.memberIds && data.memberIds.length > 0) {
+        docData.memberIds = data.memberIds;
+    } else {
+        docData.memberIds = deleteField();
+    }
+
+    const docRef = doc(db, 'cashier_days', id);
+    await updateDoc(docRef, docData);
+
+    revalidatePath('/admin');
+    revalidatePath('/anggota', 'layout');
+}
+
+/**
+ * Adds a new cashier day to the database.
+ * @param {object} data - The data for the new cashier day.
+ * @param {Date} data.date - The date of the cashier day.
+ * @param {string} data.description - The description of the cashier day.
+ * @param {number} data.duesAmount - The dues amount.
+ * @param {string[]} [data.memberIds] - The list of members this applies to.
+ * @returns {Promise<void | { error: string }>} A promise that resolves when the addition is complete.
  */
 export async function addCashierDay(data: { date: Date; description: string; duesAmount: number; memberIds?: string[] }) {
     if (!data.date || !data.description) {
