@@ -43,7 +43,7 @@ export default function AdminTabs({ members, transactions, cashierDays, settings
         <MemberManager initialMembers={members} transactions={transactions} cashierDays={cashierDays} settings={settings} isReadOnly={isReadOnly}/>
       </TabsContent>
       <TabsContent value="cashier-days">
-        <CashierDayManager initialCashierDays={cashierDays} isReadOnly={isReadOnly} />
+        <CashierDayManager initialCashierDays={cashierDays} members={members} isReadOnly={isReadOnly} />
       </TabsContent>
     </Tabs>
   );

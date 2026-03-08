@@ -305,6 +305,7 @@ export async function getCashierDays(): Promise<CashierDay[]> {
             ...data,
             date: data.date.toDate().toISOString(),
             duesAmount: typeof data.duesAmount === 'number' ? data.duesAmount : settings.duesAmount,
+            memberIds: data.memberIds || [],
         } as unknown as CashierDay
     });
 }
@@ -314,15 +315,20 @@ export async function getCashierDays(): Promise<CashierDay[]> {
  * @param data - The cashier day object to add.
  * @returns {Promise<{error: string} | undefined>} A promise that resolves to an error object if the date or description is empty, otherwise undefined.
  */
-export async function addCashierDay(data: { date: Date; description: string; duesAmount: number }) {
+export async function addCashierDay(data: { date: Date; description: string; duesAmount: number; memberIds?: string[] }) {
     if (!data.date || !data.description) {
         return { error: 'Tanggal dan deskripsi tidak boleh kosong.' };
     }
-    await addDoc(collection(db, 'cashier_days'), {
+    const docData: any = {
         date: Timestamp.fromDate(data.date),
         description: data.description,
         duesAmount: data.duesAmount
-    });
+    };
+    if (data.memberIds && data.memberIds.length > 0) {
+        docData.memberIds = data.memberIds;
+    }
+
+    await addDoc(collection(db, 'cashier_days'), docData);
     revalidatePath('/admin');
     revalidatePath('/anggota', 'layout');
 }
