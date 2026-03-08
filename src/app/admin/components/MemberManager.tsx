@@ -208,7 +208,12 @@ export default function MemberManager({ initialMembers, transactions, cashierDay
             .filter(t => t.type === 'Pemasukan' && t.memberId === member.id)
             .reduce((sum, t) => sum + t.amount, 0);
 
-        const totalDuesLiability = cashierDays.reduce((sum, day) => sum + (day.duesAmount || settings.duesAmount || 0), 0);
+        const relevantCashierDays = cashierDays.filter(day => {
+          if (!day.memberIds || day.memberIds.length === 0) return true;
+          return day.memberIds.includes(member.id);
+        });
+
+        const totalDuesLiability = relevantCashierDays.reduce((sum, day) => sum + (day.duesAmount || settings.duesAmount || 0), 0);
 
         const personalExpensesTotal = transactions
             .filter(t => t.type === 'Pengeluaran' && t.memberId === member.id)

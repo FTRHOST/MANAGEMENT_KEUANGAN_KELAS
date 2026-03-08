@@ -49,7 +49,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { useToast } from '@/hooks/use-toast';
 import { addCashierDay, deleteCashierDay } from '@/lib/actions';
-import type { CashierDay } from '@/lib/types';
+import type { CashierDay, Member } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { PlusCircle, Trash2, Loader2, CalendarIcon, FileDown, ClipboardCopy } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -64,6 +64,8 @@ const cashierDaySchema = z.object({
   description: z.string().min(3, 'Deskripsi minimal 3 karakter'),
   duesAmountOption: z.string({ required_error: 'Nominal iuran wajib dipilih' }),
   customDuesAmount: z.coerce.number().optional(),
+  applyToAll: z.boolean().default(true),
+  memberIds: z.array(z.string()).default([]),
 }).refine(data => {
     if (data.duesAmountOption === 'custom' && (!data.customDuesAmount || data.customDuesAmount <= 0)) {
         return false;
@@ -72,6 +74,14 @@ const cashierDaySchema = z.object({
 }, {
     message: 'Jumlah kustom harus lebih dari 0',
     path: ['customDuesAmount'],
+}).refine(data => {
+    if (!data.applyToAll && data.memberIds.length === 0) {
+        return false;
+    }
+    return true;
+}, {
+    message: 'Minimal satu anggota harus dipilih jika tidak diterapkan ke semua',
+    path: ['memberIds'],
 });
 
 function formatCurrency(amount: number) {
@@ -84,10 +94,11 @@ function formatCurrency(amount: number) {
 
 type CashierDayManagerProps = {
   initialCashierDays: CashierDay[];
+  members: Member[];
   isReadOnly: boolean;
 };
 
-export default function CashierDayManager({ initialCashierDays, isReadOnly }: CashierDayManagerProps) {
+export default function CashierDayManager({ initialCashierDays, members, isReadOnly }: CashierDayManagerProps) {
   const { toast } = useToast();
   const [cashierDays, setCashierDays] = useState(initialCashierDays);
   const [isSubmitting, setSubmitting] = useState(false);
@@ -96,7 +107,7 @@ export default function CashierDayManager({ initialCashierDays, isReadOnly }: Ca
 
   const form = useForm<z.infer<typeof cashierDaySchema>>({
     resolver: zodResolver(cashierDaySchema),
-    defaultValues: { description: '', date: new Date(), duesAmountOption: '2000' },
+    defaultValues: { description: '', date: new Date(), duesAmountOption: '2000', applyToAll: true, memberIds: [] },
   });
 
   const duesAmountOption = form.watch('duesAmountOption');
@@ -113,11 +124,18 @@ export default function CashierDayManager({ initialCashierDays, isReadOnly }: Ca
         ? values.customDuesAmount! 
         : parseInt(values.duesAmountOption, 10);
 
-      await addCashierDay({ date: values.date, description: values.description, duesAmount });
+      const payload = {
+          date: values.date,
+          description: values.description,
+          duesAmount,
+          memberIds: values.applyToAll ? [] : values.memberIds
+      };
+
+      await addCashierDay(payload);
       
       toast({ title: 'Sukses', description: 'Hari kas baru berhasil ditambahkan.' });
       setDialogOpen(false);
-      form.reset({ description: '', date: new Date(), duesAmountOption: '2000', customDuesAmount: undefined });
+      form.reset({ description: '', date: new Date(), duesAmountOption: '2000', customDuesAmount: undefined, applyToAll: true, memberIds: [] });
       // Revalidation will update the list
     } catch (error: any) {
       toast({ variant: 'destructive', title: 'Error', description: error.message });
@@ -405,6 +423,80 @@ Terima kasih atas perhatiannya! 🙏`;
                                 </FormItem>
                             )}
                         />
+                      )}
+
+                      <FormField
+                          control={form.control}
+                          name="applyToAll"
+                          render={({ field }) => (
+                              <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                                  <FormControl>
+                                      <Checkbox checked={field.value} onCheckedChange={(val) => {
+                                          field.onChange(val);
+                                          if (val) form.setValue('memberIds', []);
+                                      }} />
+                                  </FormControl>
+                                  <div className="space-y-1 leading-none">
+                                      <FormLabel>Terapkan ke Semua Anggota</FormLabel>
+                                      <p className="text-xs text-muted-foreground">
+                                          Jika dicentang, agenda ini wajib untuk semua anggota kelas.
+                                      </p>
+                                  </div>
+                              </FormItem>
+                          )}
+                      />
+
+                      {!form.watch('applyToAll') && (
+                          <FormField
+                              control={form.control}
+                              name="memberIds"
+                              render={() => (
+                                  <FormItem>
+                                      <div className="mb-2">
+                                          <FormLabel>Pilih Anggota</FormLabel>
+                                          <p className="text-xs text-muted-foreground mt-1">
+                                              Pilih anggota yang wajib membayar iuran ini.
+                                          </p>
+                                      </div>
+                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2 border rounded-md p-4 max-h-48 overflow-y-auto">
+                                          {members.map((member) => (
+                                              <FormField
+                                                  key={member.id}
+                                                  control={form.control}
+                                                  name="memberIds"
+                                                  render={({ field }) => {
+                                                      return (
+                                                          <FormItem
+                                                              key={member.id}
+                                                              className="flex flex-row items-start space-x-3 space-y-0"
+                                                          >
+                                                              <FormControl>
+                                                                  <Checkbox
+                                                                      checked={field.value?.includes(member.id)}
+                                                                      onCheckedChange={(checked) => {
+                                                                          return checked
+                                                                              ? field.onChange([...(field.value || []), member.id])
+                                                                              : field.onChange(
+                                                                                  field.value?.filter(
+                                                                                      (value) => value !== member.id
+                                                                                  )
+                                                                              )
+                                                                      }}
+                                                                  />
+                                                              </FormControl>
+                                                              <FormLabel className="font-normal">
+                                                                  {member.name} {member.nim ? `(${member.nim})` : ''}
+                                                              </FormLabel>
+                                                          </FormItem>
+                                                      )
+                                                  }}
+                                              />
+                                          ))}
+                                      </div>
+                                      <FormMessage />
+                                  </FormItem>
+                              )}
+                          />
                       )}
 
                         <DialogFooter>

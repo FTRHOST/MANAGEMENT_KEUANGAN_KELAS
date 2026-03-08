@@ -104,16 +104,19 @@ const transactionSchema = z.object({
   date: z.date({ required_error: 'Tanggal wajib diisi.' }),
   description: z.string().min(3, 'Deskripsi minimal 3 karakter.'),
   memberId: z.string().optional(),
+  memberIds: z.array(z.string()).optional(),
   treasurer: z.enum(['Bendahara 1', 'Bendahara 2']).optional(),
   applyToAll: z.boolean().optional(),
 }).refine(data => {
     if (data.type === 'Pemasukan' && !data.applyToAll) {
-        return data.memberId && data.memberId.trim() !== "";
+        const hasSingle = data.memberId && data.memberId.trim() !== "";
+        const hasMultiple = data.memberIds && data.memberIds.length > 0;
+        return hasSingle || hasMultiple;
     }
     return true;
 }, {
     message: 'Anggota wajib dipilih untuk pemasukan.',
-    path: ['memberId'],
+    path: ['memberIds'],
 });
 
 type TransactionManagerProps = {
@@ -151,6 +154,7 @@ export default function TransactionManager({ initialTransactions, members, isRea
         description: '', 
         applyToAll: false,
         memberId: '',
+        memberIds: [],
         treasurer: 'Bendahara 1',
         amount: 0,
     },
@@ -276,7 +280,7 @@ export default function TransactionManager({ initialTransactions, members, isRea
     return { filteredTransactions: filtered, totalIncome: income, totalExpenses: expenses };
   }, [date, groupedTransactions, treasurerFilter]);
 
-  const handleDialogOpen = (transaction: Transaction | null) => {
+  const handleDialogOpen = (transaction: (Transaction & { subTransactions?: Transaction[] }) | null) => {
     if (isReadOnly || (transaction?.batchId && !transaction.subTransactions)) return;
     setEditingTransaction(transaction);
     if (transaction) {
@@ -286,6 +290,7 @@ export default function TransactionManager({ initialTransactions, members, isRea
         date: new Date(transaction.date),
         applyToAll: false, 
         memberId: transaction.memberId || '',
+        memberIds: transaction.memberId ? [transaction.memberId] : [],
         treasurer: transaction.treasurer || 'Bendahara 1'
       });
       setPaymentSource(transaction.treasurer || 'Bendahara 1');
@@ -296,6 +301,7 @@ export default function TransactionManager({ initialTransactions, members, isRea
           description: '', 
           date: new Date(), 
           memberId: '', 
+          memberIds: [],
           treasurer: 'Bendahara 1', 
           applyToAll: false 
       });
@@ -346,7 +352,17 @@ export default function TransactionManager({ initialTransactions, members, isRea
                 toast({ title: 'Sukses', description: 'Transaksi baru berhasil ditambahkan.' });
             }
         } else { // Pemasukan
-            await addTransaction({ ...values, treasurer: values.treasurer || 'Bendahara 1' });
+            const submissionData = { ...values, treasurer: values.treasurer || 'Bendahara 1' };
+            if (!values.applyToAll && values.memberIds && values.memberIds.length > 0) {
+                // If only one member is selected, simplify it to single transaction
+                if (values.memberIds.length === 1) {
+                    submissionData.memberId = values.memberIds[0];
+                    delete submissionData.memberIds;
+                }
+            } else if (values.applyToAll) {
+                delete submissionData.memberIds;
+            }
+            await addTransaction(submissionData);
             toast({ title: 'Sukses', description: 'Transaksi baru berhasil ditambahkan.' });
         }
       }
@@ -745,7 +761,10 @@ export default function TransactionManager({ initialTransactions, members, isRea
                       render={({ field }) => (
                         <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
                           <FormControl>
-                            <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                            <Checkbox checked={field.value} onCheckedChange={(val) => {
+                                field.onChange(val);
+                                if (val) form.setValue('memberIds', []);
+                            }} />
                           </FormControl>
                           <div className="space-y-1 leading-none">
                             <FormLabel>Terapkan ke Semua Anggota (Bagi Rata)</FormLabel>
@@ -758,14 +777,67 @@ export default function TransactionManager({ initialTransactions, members, isRea
                     />
                 )}
 
-                {transactionType === 'Pemasukan' && !form.watch('applyToAll') && (
+                {transactionType === 'Pemasukan' && !form.watch('applyToAll') && !editingTransaction && (
+                  <FormField
+                    control={form.control}
+                    name="memberIds"
+                    render={() => (
+                      <FormItem>
+                        <div className="mb-2">
+                          <FormLabel>Pilih Anggota</FormLabel>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Pilih satu atau lebih anggota. Jumlah pemasukan akan dibagi rata untuk anggota yang dipilih.
+                          </p>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2 border rounded-md p-4 max-h-48 overflow-y-auto">
+                            {members.map((member) => (
+                              <FormField
+                                key={member.id}
+                                control={form.control}
+                                name="memberIds"
+                                render={({ field }) => {
+                                  return (
+                                    <FormItem
+                                      key={member.id}
+                                      className="flex flex-row items-start space-x-3 space-y-0"
+                                    >
+                                      <FormControl>
+                                        <Checkbox
+                                          checked={field.value?.includes(member.id)}
+                                          onCheckedChange={(checked) => {
+                                            return checked
+                                              ? field.onChange([...(field.value || []), member.id])
+                                              : field.onChange(
+                                                  field.value?.filter(
+                                                    (value) => value !== member.id
+                                                  )
+                                                )
+                                          }}
+                                        />
+                                      </FormControl>
+                                      <FormLabel className="font-normal">
+                                        {member.name} {member.nim ? `(${member.nim})` : ''}
+                                      </FormLabel>
+                                    </FormItem>
+                                  )
+                                }}
+                              />
+                            ))}
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+
+                {transactionType === 'Pemasukan' && editingTransaction && (
                   <FormField
                     control={form.control}
                     name="memberId"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Nama Anggota</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value || ''} disabled={!!editingTransaction}>
+                          <Select onValueChange={field.onChange} value={field.value || ''} disabled={true}>
                               <FormControl>
                                   <SelectTrigger>
                                       <SelectValue placeholder="Pilih anggota" />

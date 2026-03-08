@@ -74,4 +74,6 @@ export type CashierDay = {
   description: string;
   /** The dues amount for the cashier day (optional). */
   duesAmount?: number;
+  /** The IDs of specific members this cashier day applies to. If empty or undefined, it applies to all. */
+  memberIds?: string[];
 };

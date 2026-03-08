@@ -142,14 +142,19 @@ export async function deleteMember(id: string) {
 /**
  * Adds a new transaction to the Firestore database.
  * If the transaction is a 'Pemasukan' and 'applyToAll' is true, it creates a transaction for each member.
+ * If 'memberIds' is provided, it applies the transaction to those specific members.
  * @param transaction - The transaction object to add.
  */
-export async function addTransaction(transaction: Omit<Transaction, 'id' | 'date' | 'memberId'> & { date: Date, memberId?: string | null, applyToAll?: boolean }) {
-  if (transaction.type === 'Pemasukan' && transaction.applyToAll) {
+export async function addTransaction(transaction: Omit<Transaction, 'id' | 'date' | 'memberId'> & { date: Date, memberId?: string | null, applyToAll?: boolean, memberIds?: string[] }) {
+  if (transaction.type === 'Pemasukan' && (transaction.applyToAll || (transaction.memberIds && transaction.memberIds.length > 1))) {
     const batch = writeBatch(db);
     const membersSnapshot = await getDocs(query(collection(db, 'members'), orderBy('name')));
-    const members = membersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Member));
+    let members = membersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Member));
     
+    if (transaction.memberIds && transaction.memberIds.length > 0 && !transaction.applyToAll) {
+        members = members.filter(m => transaction.memberIds!.includes(m.id));
+    }
+
     if (members.length === 0) throw new Error("Tidak ada anggota untuk menerapkan transaksi.");
     
     const amountPerMember = transaction.amount / members.length;
@@ -157,7 +162,7 @@ export async function addTransaction(transaction: Omit<Transaction, 'id' | 'date
 
     members.forEach(member => {
       const transactionDocRef = doc(collection(db, 'transactions'));
-      const dataToSave: Partial<Transaction> & { date: Timestamp } = {
+      const dataToSave: any = {
         type: transaction.type,
         amount: amountPerMember,
         date: Timestamp.fromDate(transaction.date),
@@ -200,6 +205,7 @@ export async function addTransaction(transaction: Omit<Transaction, 'id' | 'date
     }
     
     delete dataToSave.applyToAll; // Remove temporary flag
+    delete dataToSave.memberIds;
 
     if (!dataToSave.treasurer) {
       dataToSave.treasurer = null;
@@ -299,6 +305,7 @@ export async function getCashierDays(): Promise<CashierDay[]> {
             ...data,
             date: data.date.toDate().toISOString(),
             duesAmount: typeof data.duesAmount === 'number' ? data.duesAmount : settings.duesAmount,
+            memberIds: data.memberIds || [],
         } as unknown as CashierDay
     });
 }
@@ -308,15 +315,20 @@ export async function getCashierDays(): Promise<CashierDay[]> {
  * @param data - The cashier day object to add.
  * @returns {Promise<{error: string} | undefined>} A promise that resolves to an error object if the date or description is empty, otherwise undefined.
  */
-export async function addCashierDay(data: { date: Date; description: string; duesAmount: number }) {
+export async function addCashierDay(data: { date: Date; description: string; duesAmount: number; memberIds?: string[] }) {
     if (!data.date || !data.description) {
         return { error: 'Tanggal dan deskripsi tidak boleh kosong.' };
     }
-    await addDoc(collection(db, 'cashier_days'), {
+    const docData: any = {
         date: Timestamp.fromDate(data.date),
         description: data.description,
         duesAmount: data.duesAmount
-    });
+    };
+    if (data.memberIds && data.memberIds.length > 0) {
+        docData.memberIds = data.memberIds;
+    }
+
+    await addDoc(collection(db, 'cashier_days'), docData);
     revalidatePath('/admin');
     revalidatePath('/anggota', 'layout');
 }

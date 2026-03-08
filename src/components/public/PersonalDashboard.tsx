@@ -193,9 +193,15 @@ export function PersonalDashboard({
         (t) => t.memberId === member.id && t.type === 'Pemasukan'
     );
     
+    // Filter out cashier days that are specifically for other members
+    const relevantCashierDays = cashierDays.filter(day => {
+       if (!day.memberIds || day.memberIds.length === 0) return true; // applies to all
+       return day.memberIds.includes(member.id);
+    });
+
     // Menandai hari kas mana yang sudah lunas
     let paidDuesCount = Math.floor(totalPaid / duesPerMeeting);
-    const sortedCashierDays = [...cashierDays].sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    const sortedCashierDays = [...relevantCashierDays].sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     
     const paidDues: CashierDay[] = [];
     const unpaidDues: CashierDay[] = [];
@@ -211,7 +217,7 @@ export function PersonalDashboard({
     });
 
     // Total iuran yang seharusnya dibayar
-    const totalDuesLiability = cashierDays.reduce((sum, day) => sum + (day.duesAmount || duesPerMeeting), 0);
+    const totalDuesLiability = relevantCashierDays.reduce((sum, day) => sum + (day.duesAmount || duesPerMeeting), 0);
     
     // Tunggakan iuran wajib
     const unpaidDuesAmount = Math.max(0, totalDuesLiability - totalPaid);
