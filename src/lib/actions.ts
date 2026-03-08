@@ -142,14 +142,19 @@ export async function deleteMember(id: string) {
 /**
  * Adds a new transaction to the Firestore database.
  * If the transaction is a 'Pemasukan' and 'applyToAll' is true, it creates a transaction for each member.
+ * If 'memberIds' is provided, it applies the transaction to those specific members.
  * @param transaction - The transaction object to add.
  */
-export async function addTransaction(transaction: Omit<Transaction, 'id' | 'date' | 'memberId'> & { date: Date, memberId?: string | null, applyToAll?: boolean }) {
-  if (transaction.type === 'Pemasukan' && transaction.applyToAll) {
+export async function addTransaction(transaction: Omit<Transaction, 'id' | 'date' | 'memberId'> & { date: Date, memberId?: string | null, applyToAll?: boolean, memberIds?: string[] }) {
+  if (transaction.type === 'Pemasukan' && (transaction.applyToAll || (transaction.memberIds && transaction.memberIds.length > 1))) {
     const batch = writeBatch(db);
     const membersSnapshot = await getDocs(query(collection(db, 'members'), orderBy('name')));
-    const members = membersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Member));
+    let members = membersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Member));
     
+    if (transaction.memberIds && transaction.memberIds.length > 0 && !transaction.applyToAll) {
+        members = members.filter(m => transaction.memberIds!.includes(m.id));
+    }
+
     if (members.length === 0) throw new Error("Tidak ada anggota untuk menerapkan transaksi.");
     
     const amountPerMember = transaction.amount / members.length;
@@ -157,7 +162,7 @@ export async function addTransaction(transaction: Omit<Transaction, 'id' | 'date
 
     members.forEach(member => {
       const transactionDocRef = doc(collection(db, 'transactions'));
-      const dataToSave: Partial<Transaction> & { date: Timestamp } = {
+      const dataToSave: any = {
         type: transaction.type,
         amount: amountPerMember,
         date: Timestamp.fromDate(transaction.date),
@@ -200,6 +205,7 @@ export async function addTransaction(transaction: Omit<Transaction, 'id' | 'date
     }
     
     delete dataToSave.applyToAll; // Remove temporary flag
+    delete dataToSave.memberIds;
 
     if (!dataToSave.treasurer) {
       dataToSave.treasurer = null;
