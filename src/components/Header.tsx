@@ -10,7 +10,7 @@ import HeaderClient from './HeaderClient';
  * @returns {Promise<JSX.Element>} A promise that resolves to the HeaderClient component.
  */
 export async function Header() {
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
   const isAuthenticated = !!cookieStore.get('__session');
   const settings = await getSettings();
 

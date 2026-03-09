@@ -158,7 +158,7 @@ export async function addTransaction(transaction: Omit<Transaction, 'id' | 'date
 
     if (members.length === 0) throw new Error("Tidak ada anggota untuk menerapkan transaksi.");
     
-    const amountPerMember = transaction.amount / members.length;
+    const amountPerMember = transaction.applyToAll ? transaction.amount / members.length : transaction.amount;
     const batchId = randomUUID(); // Group transactions from this operation
 
     members.forEach(member => {

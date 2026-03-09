@@ -11,15 +11,17 @@ export async function login(password: string) {
       path: '/',
   };
 
+  const cookieStore = await cookies();
+
   if (password === 'UINSAGA25') {
-    cookies().set('__session', 'true', cookieOptions);
-    cookies().set('session_role', 'admin', cookieOptions);
+    cookieStore.set('__session', 'true', cookieOptions);
+    cookieStore.set('session_role', 'admin', cookieOptions);
     return { success: true };
   }
   
   if (password === 'TI25') {
-    cookies().set('__session', 'true', cookieOptions);
-    cookies().set('session_role', 'readonly', cookieOptions);
+    cookieStore.set('__session', 'true', cookieOptions);
+    cookieStore.set('session_role', 'readonly', cookieOptions);
     return { success: true };
   }
 
@@ -27,6 +29,7 @@ export async function login(password: string) {
 }
 
 export async function logout() {
-  cookies().delete('__session');
-  cookies().delete('session_role');
+  const cookieStore = await cookies();
+  cookieStore.delete('__session');
+  cookieStore.delete('session_role');
 }

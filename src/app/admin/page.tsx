@@ -40,7 +40,7 @@ async function getAdminData() {
  */
 export default async function AdminPage() {
     const { members, transactions, cashierDays, settings } = await getAdminData();
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
     const role = cookieStore.get('session_role')?.value ?? 'readonly';
     const isReadOnly = role === 'readonly';
   

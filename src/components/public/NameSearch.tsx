@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Command, CommandInput, CommandItem, CommandList, CommandEmpty, CommandGroup } from '@/components/ui/command';
 import type { Member } from '@/lib/types';
 import { suggestSimilarNames } from '@/ai/flows/suggest-similar-names';
-import { useDebounce } from 'usehooks-ts';
+import { useDebounceValue } from 'usehooks-ts';
 import { Loader2, Search } from 'lucide-react';
 
 type NameSearchProps = {
@@ -21,7 +21,7 @@ export default function NameSearch({ members }: NameSearchProps) {
   const [isLoading, setIsLoading] = useState(false);
   const commandRef = useRef<HTMLDivElement>(null);
 
-  const debouncedQuery = useDebounce(query, 300);
+  const [debouncedQuery] = useDebounceValue(query, 300);
 
   useEffect(() => {
     const handleOutsideClick = (event: MouseEvent) => {
