@@ -14,7 +14,7 @@ export default async function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
   const isAuthenticated = !!cookieStore.get('__session');
 
   if (isAuthenticated) {

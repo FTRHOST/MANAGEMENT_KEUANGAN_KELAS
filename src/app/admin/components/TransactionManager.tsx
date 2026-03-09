@@ -141,6 +141,8 @@ export default function TransactionManager({ initialTransactions, members, isRea
   const [selectedTransactions, setSelectedTransactions] = useState<string[]>([]);
   const [date, setDate] = useState<DateRange | undefined>();
   const [treasurerFilter, setTreasurerFilter] = useState('Semua');
+  const [memberSearchQuery, setMemberSearchQuery] = useState('');
+  const [transactionSearchQuery, setTransactionSearchQuery] = useState('');
   
   // State for combined treasurer payment
   const [paymentSource, setPaymentSource] = useState('Bendahara 1');
@@ -252,7 +254,15 @@ export default function TransactionManager({ initialTransactions, members, isRea
           }
       }
 
-      return dateMatch && treasurerMatch;
+      let searchMatch = true;
+      if (transactionSearchQuery) {
+          const q = transactionSearchQuery.toLowerCase();
+          searchMatch =
+              t.description.toLowerCase().includes(q) ||
+              (t.memberName && t.memberName.toLowerCase().includes(q)) || false;
+      }
+
+      return dateMatch && treasurerMatch && searchMatch;
     });
 
     const getFlattened = (arr: (Transaction & { memberCount?: number; totalAmount?: number, subTransactions?: Transaction[] })[]) => {
@@ -530,12 +540,20 @@ export default function TransactionManager({ initialTransactions, members, isRea
                 </Button>
             </div>
 
-            <div className="flex justify-between items-center">
-              <Button variant="outline" onClick={handleExport}>
-                <FileDown className="mr-2 h-4 w-4" /> Ekspor ke XLSX
-              </Button>
+            <div className="flex justify-between items-center gap-4 flex-wrap">
+              <div className="flex items-center gap-2 flex-grow max-w-sm">
+                  <Input
+                      placeholder="Cari nama atau deskripsi..."
+                      value={transactionSearchQuery}
+                      onChange={(e) => setTransactionSearchQuery(e.target.value)}
+                  />
+              </div>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" onClick={handleExport}>
+                  <FileDown className="mr-2 h-4 w-4" /> Ekspor
+                </Button>
               {!isReadOnly && (
-                <div className="flex items-center gap-2">
+                <>
                   {selectedTransactions.length > 0 && (
                       <AlertDialog>
                           <AlertDialogTrigger asChild>
@@ -562,8 +580,9 @@ export default function TransactionManager({ initialTransactions, members, isRea
                   <Button onClick={() => handleDialogOpen(null)}>
                     <PlusCircle className="mr-2 h-4 w-4" /> Tambah Transaksi
                   </Button>
-                </div>
+                </>
               )}
+              </div>
             </div>
         </div>
 
@@ -719,7 +738,7 @@ export default function TransactionManager({ initialTransactions, members, isRea
         </div>
 
         <Dialog open={isDialogOpen} onOpenChange={setDialogOpen}>
-          <DialogContent className="sm:max-w-md">
+          <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>{editingTransaction ? 'Edit Transaksi' : 'Tambah Transaksi Baru'}</DialogTitle>
             </DialogHeader>
@@ -785,12 +804,19 @@ export default function TransactionManager({ initialTransactions, members, isRea
                       <FormItem>
                         <div className="mb-2">
                           <FormLabel>Pilih Anggota</FormLabel>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            Pilih satu atau lebih anggota. Jumlah pemasukan akan dibagi rata untuk anggota yang dipilih.
+                          <p className="text-xs text-muted-foreground mt-1 mb-2">
+                            Pilih satu atau lebih anggota. Jumlah pemasukan akan diaplikasikan sepenuhnya ke setiap anggota yang dipilih (tidak dibagi rata) kecuali "Bagi Rata" dicentang.
                           </p>
+                          <Input
+                              type="text"
+                              placeholder="Cari anggota..."
+                              value={memberSearchQuery}
+                              onChange={(e) => setMemberSearchQuery(e.target.value)}
+                              className="mb-2"
+                          />
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2 border rounded-md p-4 max-h-48 overflow-y-auto">
-                            {members.map((member) => (
+                            {members.filter(m => m.name.toLowerCase().includes(memberSearchQuery.toLowerCase()) || m.nim?.toLowerCase().includes(memberSearchQuery.toLowerCase())).map((member) => (
                               <FormField
                                 key={member.id}
                                 control={form.control}
@@ -883,7 +909,20 @@ export default function TransactionManager({ initialTransactions, members, isRea
                         <FormItem>
                             <FormLabel>Jumlah</FormLabel>
                             <FormControl>
-                                <Input type="number" placeholder="70000" {...field} onChange={e => field.onChange(e.target.valueAsNumber || 0)} />
+                                <div className="relative">
+                                    <Input
+                                      type="number"
+                                      placeholder="70000"
+                                      {...field}
+                                      onChange={e => field.onChange(e.target.valueAsNumber || 0)}
+                                      list="common-amounts"
+                                    />
+                                    <datalist id="common-amounts">
+                                        <option value="2000" />
+                                        <option value="4000" />
+                                        <option value="6000" />
+                                    </datalist>
+                                </div>
                             </FormControl>
                             <FormMessage />
                         </FormItem>

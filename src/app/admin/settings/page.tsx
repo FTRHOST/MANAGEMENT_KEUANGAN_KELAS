@@ -10,7 +10,7 @@ import { Terminal } from "lucide-react";
 
 export default async function SettingsPage() {
   const settings: Settings = await getSettings();
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
   const role = cookieStore.get('session_role')?.value ?? 'readonly';
   const isReadOnly = role === 'readonly';
 

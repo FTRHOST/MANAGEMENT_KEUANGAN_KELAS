@@ -35,8 +35,9 @@ async function getData(memberId: string) {
   return { member, transactions, cashierDays, settings, totalMembers };
 }
 
-export default async function AnggotaPage({ params }: { params: { id: string } }) {
-  const data = await getData(params.id);
+export default async function AnggotaPage({ params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params;
+  const data = await getData(resolvedParams.id);
 
   if (!data) {
     notFound();
